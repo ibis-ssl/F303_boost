@@ -1,0 +1,13 @@
+../Core/Src/adns3080.c:33:6:start_transmit	8	static
+../Core/Src/adns3080.c:38:6:end_transmit	8	static
+../Core/Src/adns3080.c:44:13:reset	16	static
+../Core/Src/adns3080.c:60:6:is_connect_ADNS3080	16	static
+../Core/Src/adns3080.c:85:6:init_ADNS3080	32	static
+../Core/Src/adns3080.c:113:6:update_ADNS3080	16	static
+../Core/Src/adns3080.c:135:8:get_DeltaX_ADNS3080	4	static
+../Core/Src/adns3080.c:138:8:get_DeltaY_ADNS3080	4	static
+../Core/Src/adns3080.c:141:9:get_Qualty_ADNS3080	4	static
+../Core/Src/adns3080.c:145:6:clear_XY_ADNS3080	4	static
+../Core/Src/adns3080.c:149:9:get_X_ADNS3080	4	static
+../Core/Src/adns3080.c:152:9:get_Y_ADNS3080	4	static
+../Core/Src/adns3080.c:156:6:frame_print_ADNS3080	56	static

@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "adns3080.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -164,96 +165,29 @@ int main(void)
   HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
 
+  if (is_connect_ADNS3080())
+  {
+    printf("ADNS3080 OK!\n");
+  }
+  else
+  {
+    printf("ADNS3080 not found...\n");
+    while (1)
+    {
+      /* code */
+    }
+    
+  }
 
-  uint8_t sbuf[16] = {0}, rbuf[16] = {0};
-
-  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 1, 1000);
-
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
-  HAL_Delay(1);
-
-  HAL_GPIO_WritePin(MOUSE_RST_GPIO_Port, MOUSE_RST_Pin, GPIO_PIN_SET);
-  HAL_Delay(1);
-  HAL_GPIO_WritePin(MOUSE_RST_GPIO_Port, MOUSE_RST_Pin, GPIO_PIN_RESET);
-  HAL_Delay(1);
-
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 2, 1000);
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
-
-  printf("SPI ID : %d\n",rbuf[1]);
-
-
-  HAL_Delay(10);
-/*
-  sbuf[0] = 0x0A;	//config read
-
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 2, 1000);
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
-
-  printf("Config : %d\n",rbuf[1]);
-
-  uint8_t mouse_config = rbuf[1];
-
-  HAL_Delay(10);
-
-  sbuf[0] = 0x80 & 0x0A;	//config write
-  sbuf[1] = mouse_config | 0x10;
-
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_RESET);
-  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 2, 1000);
-  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
-
-
-  HAL_Delay(10);
-*/
-/*
-  char scale[] = "#987654321-,.'` ";
+  init_ADNS3080(true);
 
   while(1){
-	  sbuf[0] = 0x13 | 0x80;// frame capture write
-	  sbuf[1] = 0x83;
-	  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_RESET);
-	  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 2, 1000);
-	  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
+    frame_print_ADNS3080();
+    //update_ADNS3080();
+    //printf("%+3d %+3d %4d\n",get_DeltaX_ADNS3080(),get_DeltaY_ADNS3080(),get_Qualty_ADNS3080());
 
-	  HAL_Delay(2);
+    HAL_Delay(100);
 
-	  for(int pixel_x = 0;pixel_x < 30; pixel_x++){
-		  for(int pixel_y = 0;pixel_y < 30; pixel_y++){
-			  sbuf[0] = 0x13;// frame capture
-			  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_RESET);
-			  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 2, 1000);
-			  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
-			  //printf("%2d ",(rbuf[1] % 0x3F)>>2);
-			  printf("%c",scale[(rbuf[1] % 0x3F)>>2]);
-		  }
-		  printf("\n");
-	  }
-	  printf("\n\n");
-
-
-	  HAL_Delay(100);
-  }*/
-
-
-  sbuf[0] = 0x50;	//motion burst
-  int pos_x = 0,pos_y = 0;
-  while(1){
-
-	  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_RESET);
-	  HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 5, 1000);
-	  HAL_GPIO_WritePin(MOUSE_NSS_GPIO_Port, MOUSE_NSS_Pin, GPIO_PIN_SET);
-
-	  printf("%5d %5d %5d %5d %5d - ",rbuf[0],rbuf[1],rbuf[2],rbuf[3],rbuf[4]);
-	  if(rbuf[1] & 0x80){
-		  pos_x += (int8_t)rbuf[2];
-		  pos_y += (int8_t)rbuf[3];
-	  }
-	  printf("%2x x %+5d y %+5d q %4d\n",rbuf[0],pos_x,pos_y,(int8_t)rbuf[4]);
-
-	  HAL_Delay(100);
   }
 
 
