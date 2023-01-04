@@ -171,7 +171,7 @@ void frame_print_ADNS3080(void){
             HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 2, 1000);
             end_transmit();
 
-            printf("%c", scale[(rbuf[1] % 0x3F) >> 2]);
+            printf("%c ", scale[(rbuf[1] % 0x3F) >> 2]);
         }
         printf("\n");
     }

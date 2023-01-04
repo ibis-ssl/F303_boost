@@ -73,7 +73,34 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint32_t can_rx_cnt = 0;
+uint8_t can_rx_data[8];
+CAN_RxHeaderTypeDef   can_rx_header;
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+	if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &can_rx_header, can_rx_data) != HAL_OK)
+  {
+    /* Reception Error */
+    Error_Handler();
+  }
+	can_rx_cnt++;
+}
 
+CAN_TxHeaderTypeDef can_header;
+uint8_t can_data[8];
+uint32_t can_mailbox;
+
+
+void sendCan(void){
+	can_header.StdId = 0x00;
+	can_header.RTR = CAN_RTR_DATA;
+	can_header.DLC = 8;
+	can_header.TransmitGlobalTime = DISABLE;
+	can_data[0] = 0;
+	can_data[1] = 0;
+	can_data[2] = 1;
+	can_data[3] = 1;
+	HAL_CAN_AddTxMessage(&hcan,&can_header,can_data,&can_mailbox);
+}
 /* USER CODE END 0 */
 
 /**
@@ -141,7 +168,9 @@ int main(void)
   HAL_Delay(100);
   //wait charging
 
-
+  // can init
+  //CAN_Filter_Init(0);
+  HAL_CAN_Start(&hcan);
 
   setbuf(stdout, NULL);
 
@@ -163,8 +192,16 @@ int main(void)
   HAL_ADC_Start(&hadc4);
 
   HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
+  //HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
 
+
+  while(1){
+
+	    HAL_Delay(100);
+	    sendCan();
+	    printf("can rx : %d\n",can_rx_cnt);
+	    can_rx_cnt = 0;
+  }
   if (is_connect_ADNS3080())
   {
     printf("ADNS3080 OK!\n");
@@ -186,7 +223,6 @@ int main(void)
     //update_ADNS3080();
     //printf("%+3d %+3d %4d\n",get_DeltaX_ADNS3080(),get_DeltaY_ADNS3080(),get_Qualty_ADNS3080());
 
-    HAL_Delay(100);
 
   }
 
