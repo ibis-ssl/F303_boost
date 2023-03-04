@@ -38,10 +38,39 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-int _write(int file, char *ptr, int len)
+/*int _write(int file, char *ptr, int len)
 {
   HAL_UART_Transmit_DMA(&huart1, (uint8_t *)ptr, len); // 2ms
   return len;
+}*/
+
+#define UART_TEMP_BUF_SIZE (200)
+char first_buf[UART_TEMP_BUF_SIZE];
+char temp_buf[UART_TEMP_BUF_SIZE];
+int re_queue_len = 0;
+int _write(int file, char *ptr, int len)
+{
+	if (huart1.hdmatx->State == HAL_DMA_BURST_STATE_BUSY)
+	{
+		if (len >= UART_TEMP_BUF_SIZE)
+			len = UART_TEMP_BUF_SIZE;
+		memcpy(temp_buf, ptr, len);
+		re_queue_len = len;
+		return len;
+	}
+	memcpy(first_buf, ptr, len);							   // 8ms
+	HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, len); // 2ms
+	return len;
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (re_queue_len)
+	{
+
+		HAL_UART_Transmit_DMA(&huart1, (uint8_t *)temp_buf, re_queue_len);
+		re_queue_len = 0;
+	}
 }
 /* USER CODE END PTD */
 
@@ -70,7 +99,6 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint32_t can_rx_cnt = 0;
-uint8_t rx_data[8];
 CAN_RxHeaderTypeDef can_rx_header;
 
 struct
@@ -81,13 +109,17 @@ struct
   int kick_power;
 } power_cmd;
 
-union
+typedef union
 {
-  uint8_t data[4];
+  uint8_t data[8];
 
-  float float_value;
-} uint8_to_float;
+  struct{
+	  uint8_t idx;
+	  float value;
+  }power;
+} uint8_to_float_t;
 
+uint8_to_float_t rx;
 void setTargetVoltage(float target){
 	if(target > 450){
 		target = 450;
@@ -96,7 +128,7 @@ void setTargetVoltage(float target){
 		target = 20;
 	}
 	power_cmd.target_voltage = target;
-	printf("set target voltage = %f\n",power_cmd.target_voltage);
+	//printf("set target voltage = %f\n",power_cmd.target_voltage);
 }
 
 static uint32_t loop_cnt = 0, kick_cnt = 0;
@@ -113,16 +145,16 @@ void startKick(uint8_t power){
 }
 
 void startCharge(){
-    if (boost_cnt == 0)
+    if (boost_cnt == 0 && kick_cnt == 0)
     {
-      printf("boost start!!\n");
+      //printf("boost start!!\n");
+      boost_cnt = 1000;
     }
-    boost_cnt = 1000;
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-  if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &can_rx_header, rx_data) != HAL_OK)
+  if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &can_rx_header, rx.data) != HAL_OK)
   {
     /* Reception Error */
     Error_Handler();
@@ -134,28 +166,33 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     power_cmd.charge_enabled = false;
     break;
   case 0x110: // power control
-    switch (rx_data[0])
+    switch (rx.power.idx)
     {
     case 0: // set boost voltage
-    	memcpy(uint8_to_float.data,&(rx_data[1]),4);
-    	setTargetVoltage(uint8_to_float.float_value);
+    	setTargetVoltage(rx.power.value);
       break;
     case 1: // charge enable
-    	if(rx_data[1] == 1){
+    	if(rx.data[1] == 1){
+    		//printf("[CAN] charge enable!\n");
     		power_cmd.charge_enabled = true;
+        	startCharge();
     	}else{
+    		//printf("[CAN] charge disable!\n");
     		power_cmd.charge_enabled = false;
     	}
       break;
     case 2: // kicker select
-    	if(rx_data[1] == 1){
+    	if(rx.data[1] == 1){
+    		//printf("[CAN] select chip kicker\n");
     		power_cmd.kick_chip_selected = true;
     	}else{
+    		//printf("[CAN] select straight kicker \n");
     		power_cmd.kick_chip_selected = false;
     	}
       break;
     case 3: // kick !
-      
+      printf("[CAN] kick!\n");
+  	startKick(255);
       break;
     default:
       break;
@@ -172,7 +209,7 @@ uint32_t can_mailbox;
 
 void sendCan(void)
 {
-  can_header.StdId = 0x00;
+  can_header.StdId = 0x200;
   can_header.RTR = CAN_RTR_DATA;
   can_header.DLC = 8;
   can_header.TransmitGlobalTime = DISABLE;
@@ -201,7 +238,7 @@ void updateADCs(void){
 void protecter(void){
     if (batt_v < 20 || batt_cs > 10 || gd_16p < 10 || gd_16m > -5)
     {
-      printf("power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f\n", batt_v, batt_cs, gd_16p, gd_16m);
+      printf("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f\n", batt_v, batt_cs, gd_16p, gd_16m);
       kick_cnt = 0;
       boost_cnt = 0;
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
@@ -215,9 +252,9 @@ void protecter(void){
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -278,7 +315,7 @@ int main(void)
   // wait charging
 
   // can init
-  // CAN_Filter_Init(0);
+  CAN_Filter_Init();
   HAL_CAN_Start(&hcan);
 
   setbuf(stdout, NULL);
@@ -297,7 +334,7 @@ int main(void)
   HAL_ADC_Start(&hadc4);
 
   HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
-  // HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_RESET);
 
   /*while(1){
 
@@ -356,18 +393,23 @@ int main(void)
     loop_cnt++;
     if (kick_cnt > 0)
     {
+        // kick!!!
+        if(power_cmd.kick_chip_selected){
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, power_cmd.kick_power);    	  // chip
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+        }else{
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, power_cmd.kick_power);	// straight
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+        }
       kick_cnt--;
       if (kick_cnt == 0)
       {
         printf("kick end!!\n");
-      }
-      // kick!!!
-      if(power_cmd.kick_chip_selected){
-          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, power_cmd.kick_power);    	  // chip
-          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
-      }else{
-          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, power_cmd.kick_power);	// straight
-          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+        if(power_cmd.charge_enabled){
+        	startCharge();
+        }
       }
     }
     else
@@ -380,10 +422,12 @@ int main(void)
     // User SW control
     if (HAL_GPIO_ReadPin(SW_1_GPIO_Port, SW_1_Pin) == GPIO_PIN_RESET)
     {
+    	printf("[USR] boost start!!\n");
     	startKick(255);
     }
     if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET)
     {
+    	printf("[USR] boost start!!\n");
     	startCharge();
     }
 
@@ -395,20 +439,21 @@ int main(void)
       // printf("%8ld %8ld %8ld / ",HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_3));
       // printf("%8ld %8ld\n",HAL_ADCEx_InjectedGetValue(&hadc4,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc4,ADC_INJECTED_RANK_2));
       // HAL_ADCEx_InjectedStart(&hadc1);
+    	printf("BV %3.0f, CK %d, CH %d ",power_cmd.target_voltage,power_cmd.kick_chip_selected,power_cmd.charge_enabled);
       printf("%+3d %+3d %4d ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
       printf("BattV %4.2f, GD16P %+5.2f GD16M %+5.2f BoostV %5.2f, BattCS %+5.2f temp0 %d temp1 %d temp2 %d \n", batt_v, gd_16p, gd_16m, boost_v, batt_cs, temp_fet, temp_coil_1, temp_coil_2);
       // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld / adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2], adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
       loop_cnt = 0;
     }
 
-
+    //sendCan();
     HAL_Delay(1);
     if (boost_v < power_cmd.target_voltage && boost_cnt > 0)
     {
       boost_cnt--;
       if (boost_cnt == 0)
       {
-        printf("boost timeout!!\n");
+        printf("[ERR] boost timeout!!\n");
       }
       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 600);
       HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
@@ -417,7 +462,7 @@ int main(void)
     {
       if (boost_cnt != 0)
       {
-        printf("boost end!!\n\n !! %d cycle !!\n\n", boost_cnt);
+        //printf("boost end!!\n\n !! %d cycle !!\n\n", boost_cnt);
         boost_cnt = 0;
       }
       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
@@ -438,9 +483,9 @@ int main(void)
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -448,8 +493,8 @@ void SystemClock_Config(void)
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -463,8 +508,9 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -474,7 +520,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1 | RCC_PERIPHCLK_ADC12 | RCC_PERIPHCLK_ADC34;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_ADC12
+                              |RCC_PERIPHCLK_ADC34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.Adc34ClockSelection = RCC_ADC34PLLCLK_DIV1;
@@ -489,9 +536,9 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -503,14 +550,14 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

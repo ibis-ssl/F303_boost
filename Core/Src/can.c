@@ -84,7 +84,7 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* CAN interrupt Init */
-    HAL_NVIC_SetPriority(USB_LP_CAN_RX0_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(USB_LP_CAN_RX0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(USB_LP_CAN_RX0_IRQn);
   /* USER CODE BEGIN CAN_MspInit 1 */
 
@@ -118,5 +118,26 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
-
+void CAN_Filter_Init(void)
+{
+  CAN_FilterTypeDef sFilterConfig;
+  sFilterConfig.FilterMode = CAN_FILTERMODE_IDLIST;
+  sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;
+  sFilterConfig.FilterBank = 0;
+  sFilterConfig.FilterIdHigh = (0x00) << 5;
+  sFilterConfig.FilterIdLow = (0x100) << 5;
+  sFilterConfig.FilterMaskIdHigh = (0x010) << 5;
+  sFilterConfig.FilterMaskIdLow = (0x110) << 5;
+  sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+  sFilterConfig.FilterActivation = ENABLE;
+  sFilterConfig.SlaveStartFilterBank = 0;
+  if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
 /* USER CODE END 1 */
