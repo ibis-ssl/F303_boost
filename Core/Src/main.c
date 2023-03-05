@@ -33,6 +33,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include "adns3080.h"
+#include <stdarg.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,6 +50,7 @@
 char first_buf[UART_TEMP_BUF_SIZE];
 char temp_buf[UART_TEMP_BUF_SIZE];
 int re_queue_len = 0;
+
 int _write(int file, char *ptr, int len)
 {
 	if (huart1.hdmatx->State == HAL_DMA_BURST_STATE_BUSY)
@@ -72,6 +75,26 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		re_queue_len = 0;
 	}
 }
+
+void p(const char *format, ...)
+{
+
+	va_list ap;
+	va_start(ap, format);
+
+	if (huart1.hdmatx->State == HAL_DMA_BURST_STATE_BUSY)
+	{
+		vsprintf(temp_buf + re_queue_len,format,ap);
+		va_end(ap);
+		re_queue_len = strlen(temp_buf);
+		return;
+	}
+	vsprintf(first_buf,format,ap);
+	va_end(ap);
+	HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, strlen(first_buf)); // 2ms
+	return;
+}
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -117,9 +140,27 @@ typedef union
 	  uint8_t idx;
 	  float value;
   }power;
+  struct{
+	  uint16_t node_id;
+	  uint16_t type;
+	  uint32_t etc;
+  }error_notify;
+
+  struct{
+	  uint8_t cmd;
+	  uint8_t enable;
+  }power_en;
+  struct{
+	  uint8_t idx;
+	  float value;
+  }set_protect_param;
+  struct{
+	  int16_t delta_x;
+	  int16_t delta_y;
+  }mouse;
 } uint8_to_float_t;
 
-uint8_to_float_t rx;
+uint8_to_float_t rx,tx;
 void setTargetVoltage(float target){
 	if(target > 450){
 		target = 450;
@@ -218,6 +259,17 @@ void sendCan(void)
   can_data[2] = 1;
   can_data[3] = 1;
   HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
+}
+
+void sendCanMouse(int16_t delta_x,int16_t delta_y)
+{
+  can_header.StdId = 0x240;
+  can_header.RTR = CAN_RTR_DATA;
+  can_header.DLC = 4;
+  can_header.TransmitGlobalTime = DISABLE;
+  tx.mouse.delta_x = delta_x;
+  tx.mouse.delta_y = delta_y;
+  HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
 }
 
 static float boost_v = 0, batt_v, gd_16p, gd_16m, batt_cs;
@@ -322,12 +374,12 @@ int main(void)
 
   HAL_UART_Init(&huart1);
 
-  uint8_t data[] = "orion boost v1 start!!\n";
-
-  HAL_UART_Transmit(&huart1, data, sizeof(data), 100);
-  printf("hogehoge %d ,%f\n", 10, 1.0);
-
-
+  p("p()1 hogehoge %d ,%f\n", 10, 1.0);
+  p("p()2 hogehoge %d ,%f\n", 10, 1.0);
+  p("p()3 hogehoge %d ,%f\n", 10, 1.0);
+  p("p()1 hogehoge %d ,%f\n", 10, 1.0);
+  p("p()2 hogehoge %d ,%f\n", 10, 1.0);
+  p("p()3 hogehoge %d ,%f\n", 10, 1.0);
 
   HAL_ADC_Start(&hadc1);
   HAL_ADC_Start(&hadc3);
@@ -335,6 +387,8 @@ int main(void)
 
   HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_RESET);
+
+
 
   /*while(1){
 
@@ -387,6 +441,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     update_ADNS3080();
+    sendCanMouse(get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080());
+
     updateADCs();
     protecter();
 
@@ -408,6 +464,8 @@ int main(void)
         __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
         __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
         if(power_cmd.charge_enabled){
+        	printf("continue charge!!\n");
+            HAL_Delay(10);
         	startCharge();
         }
       }
@@ -451,12 +509,13 @@ int main(void)
     if (boost_v < power_cmd.target_voltage && boost_cnt > 0)
     {
       boost_cnt--;
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 600);
+      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
       if (boost_cnt == 0)
       {
         printf("[ERR] boost timeout!!\n");
+        __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
       }
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 600);
-      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
     }
     else
     {

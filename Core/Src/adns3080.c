@@ -58,7 +58,7 @@ static void reset(void)
 }
 
 bool is_connect_ADNS3080(void){
-    HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
+    //HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
 
     reset();
 
