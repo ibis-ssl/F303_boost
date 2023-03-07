@@ -46,11 +46,12 @@
   return len;
 }*/
 
-#define UART_TEMP_BUF_SIZE (200)
-char first_buf[UART_TEMP_BUF_SIZE];
-char temp_buf[UART_TEMP_BUF_SIZE];
-int re_queue_len = 0;
-
+#define UART_TEMP_BUF_SIZE (700)
+static char first_buf[UART_TEMP_BUF_SIZE];
+static char second_buf[UART_TEMP_BUF_SIZE];
+volatile int second_buf_len = 0,first_buf_len = 0;
+volatile bool sending_second_buf = false,sending_first_buf = false;
+/*
 int _write(int file, char *ptr, int len)
 {
 	if (huart1.hdmatx->State == HAL_DMA_BURST_STATE_BUSY)
@@ -64,34 +65,65 @@ int _write(int file, char *ptr, int len)
 	memcpy(first_buf, ptr, len);							   // 8ms
 	HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, len); // 2ms
 	return len;
-}
+}*/
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-	if (re_queue_len)
-	{
 
-		HAL_UART_Transmit_DMA(&huart1, (uint8_t *)temp_buf, re_queue_len);
-		re_queue_len = 0;
+	if(sending_first_buf){ // FIRST buf complete
+		sending_first_buf = false;	//complete!
+
+		if(second_buf_len > 0){	// another buffer?
+			sending_second_buf = true;
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *)second_buf, second_buf_len);
+			second_buf_len = 0;
+		}
+	}else if(sending_second_buf){	// SECOND buf complete
+		sending_second_buf = false;	//complete!
+
+		if(first_buf_len > 0){	// another buffer?
+			sending_first_buf = true;
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, first_buf_len);
+			first_buf_len = 0;
+		}
+
 	}
 }
 
 void p(const char *format, ...)
 {
-
 	va_list ap;
 	va_start(ap, format);
 
-	if (huart1.hdmatx->State == HAL_DMA_BURST_STATE_BUSY)
+	if (sending_first_buf)
 	{
-		vsprintf(temp_buf + re_queue_len,format,ap);
+		if(second_buf_len > UART_TEMP_BUF_SIZE/2)
+			return;
+		second_buf_len += vsprintf(second_buf + second_buf_len,format,ap);
 		va_end(ap);
-		re_queue_len = strlen(temp_buf);
-		return;
+		if(sending_first_buf == false){
+			second_buf_len = (int)strlen(second_buf);
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *)second_buf, second_buf_len); // 2ms
+		}
+	}else if(sending_second_buf){
+		if(first_buf_len > UART_TEMP_BUF_SIZE/2)
+			return;
+		first_buf_len += vsprintf(first_buf + first_buf_len,format,ap);
+		va_end(ap);
+		if(sending_second_buf == false){
+			first_buf_len = (int)strlen(first_buf);
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, first_buf_len); // 2ms
+		}
+	}else{
+		// start !!
+		first_buf_len = vsprintf(first_buf,format,ap);
+		va_end(ap);
+		sending_first_buf = true;
+		HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, first_buf_len); // 2ms
+		first_buf_len = (int)strlen(first_buf);
+		first_buf_len = 0;
+		second_buf_len = 0;
 	}
-	vsprintf(first_buf,format,ap);
-	va_end(ap);
-	HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, strlen(first_buf)); // 2ms
 	return;
 }
 
@@ -104,6 +136,9 @@ void p(const char *format, ...)
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define TIM_KICK_PERI (2000)
+#define PWM_CNT (750)
+// <750
+// 750 -> 0.76~0.78s(450V)
 
 /* USER CODE END PM */
 
@@ -181,7 +216,7 @@ void startKick(uint8_t power){
       kick_cnt = 100;
       boost_cnt = 0;
       power_cmd.kick_power = TIM_KICK_PERI * power / 255;
-      printf("start kick! : %d\n",power_cmd.kick_power);
+      p("start kick! : %d\n",power_cmd.kick_power);
     }
 }
 
@@ -232,7 +267,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     	}
       break;
     case 3: // kick !
-      printf("[CAN] kick!\n");
+      p("[CAN] kick!\n");
   	startKick(255);
       break;
     default:
@@ -290,7 +325,11 @@ void updateADCs(void){
 void protecter(void){
     if (batt_v < 20 || batt_cs > 10 || gd_16p < 10 || gd_16m > -5)
     {
-      printf("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f\n", batt_v, batt_cs, gd_16p, gd_16m);
+    if(boost_cnt > 0 && batt_cs < 25){
+    	//...
+    	return;
+    }
+      p("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f boost %6.2f\n", batt_v, batt_cs, gd_16p, gd_16m,boost_v);
       kick_cnt = 0;
       boost_cnt = 0;
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
@@ -343,6 +382,10 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
+  p("\n\nstart ORION BOOST v3\n\n");
+
+
+
   // kick
   HAL_TIM_PWM_Init(&htim3);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
@@ -374,13 +417,6 @@ int main(void)
 
   HAL_UART_Init(&huart1);
 
-  p("p()1 hogehoge %d ,%f\n", 10, 1.0);
-  p("p()2 hogehoge %d ,%f\n", 10, 1.0);
-  p("p()3 hogehoge %d ,%f\n", 10, 1.0);
-  p("p()1 hogehoge %d ,%f\n", 10, 1.0);
-  p("p()2 hogehoge %d ,%f\n", 10, 1.0);
-  p("p()3 hogehoge %d ,%f\n", 10, 1.0);
-
   HAL_ADC_Start(&hadc1);
   HAL_ADC_Start(&hadc3);
   HAL_ADC_Start(&hadc4);
@@ -399,11 +435,11 @@ int main(void)
   }*/
   if (is_connect_ADNS3080())
   {
-    printf("ADNS3080 OK!\n");
+    p("ADNS3080 OK!\n");
   }
   else
   {
-    printf("ADNS3080 not found...\n");
+    p("ADNS3080 not found...\n");
     while (1)
     {
       /* code */
@@ -412,23 +448,36 @@ int main(void)
 
   init_ADNS3080(true);
 
-  bool frame_capture_mdoe = false;
   if (HAL_GPIO_ReadPin(SW_1_GPIO_Port, SW_1_Pin) == GPIO_PIN_RESET)
   {
-    frame_capture_mdoe = true;
+	  while (true)
+	  {
+	    // frame_print_ADNS3080();
+	    HAL_Delay(1);
+
+	    update_ADNS3080();
+	    p("\n\n%+3d %+3d %4d\n\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
+	    HAL_Delay(100);
+	  }
   }
-  while (frame_capture_mdoe)
+  if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET)
   {
-    // frame_print_ADNS3080();
-    HAL_Delay(1);
+	  while (true)
+	  {
+	    frame_print_ADNS3080();
+	    HAL_Delay(1);
 
-    update_ADNS3080();
-    printf("\n\n%+3d %+3d %4d\n\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
-    HAL_Delay(100);
+	    //update_ADNS3080();
+	    //p("\n\n%+3d %+3d %4d\n\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
+	    //HAL_Delay(100);
+	  }
   }
 
-  setTargetVoltage(400);
 
+
+  setTargetVoltage(450);
+
+  static int temp_pwm_autoreload = 1000,pre_pwm_autoreload = 0;
 
   /* USER CODE END 2 */
 
@@ -460,11 +509,11 @@ int main(void)
       kick_cnt--;
       if (kick_cnt == 0)
       {
-        printf("kick end!!\n");
+        p("kick end!!\n");
         __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
         __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
         if(power_cmd.charge_enabled){
-        	printf("continue charge!!\n");
+        	p("continue charge!!\n");
             HAL_Delay(10);
         	startCharge();
         }
@@ -480,12 +529,12 @@ int main(void)
     // User SW control
     if (HAL_GPIO_ReadPin(SW_1_GPIO_Port, SW_1_Pin) == GPIO_PIN_RESET)
     {
-    	printf("[USR] boost start!!\n");
+    	p("[USR] boost start!!\n");
     	startKick(255);
     }
     if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET)
     {
-    	printf("[USR] boost start!!\n");
+    	p("[USR] boost start!!\n");
     	startCharge();
     }
 
@@ -497,9 +546,11 @@ int main(void)
       // printf("%8ld %8ld %8ld / ",HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_3));
       // printf("%8ld %8ld\n",HAL_ADCEx_InjectedGetValue(&hadc4,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc4,ADC_INJECTED_RANK_2));
       // HAL_ADCEx_InjectedStart(&hadc1);
-    	printf("BV %3.0f, CK %d, CH %d ",power_cmd.target_voltage,power_cmd.kick_chip_selected,power_cmd.charge_enabled);
-      printf("%+3d %+3d %4d ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
-      printf("BattV %4.2f, GD16P %+5.2f GD16M %+5.2f BoostV %5.2f, BattCS %+5.2f temp0 %d temp1 %d temp2 %d \n", batt_v, gd_16p, gd_16m, boost_v, batt_cs, temp_fet, temp_coil_1, temp_coil_2);
+
+      //p("pwm = %d : ",temp_pwm_autoreload);
+      p("BV %3.0f, CK %d, CH %d /",power_cmd.target_voltage,power_cmd.kick_chip_selected,power_cmd.charge_enabled);
+      p("%+3d %+3d %4d /", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
+      p("BattV %4.2f, GD16P %+5.2f GD16M %+5.2f BoostV %5.2f, BattCS %+5.2f temp0 %d temp1 %d temp2 %d\n", batt_v, gd_16p, gd_16m, boost_v, batt_cs, temp_fet, temp_coil_1, temp_coil_2);
       // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld / adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2], adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
       loop_cnt = 0;
     }
@@ -509,11 +560,30 @@ int main(void)
     if (boost_v < power_cmd.target_voltage && boost_cnt > 0)
     {
       boost_cnt--;
-      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 600);
+
+		if (boost_v < 100) {
+			temp_pwm_autoreload = PWM_CNT * 3.5;
+		} else if (boost_v < 200) {
+			temp_pwm_autoreload = PWM_CNT * 1.5;
+		} else if (boost_v < 300) {
+			temp_pwm_autoreload = PWM_CNT * 1.4;
+		} else if (boost_v < 400) {
+			temp_pwm_autoreload = PWM_CNT * 1.3;
+		} else {
+			temp_pwm_autoreload = PWM_CNT * 1.25;
+		}
+		if(pre_pwm_autoreload != temp_pwm_autoreload){
+			htim2.Instance->CNT = 0;
+	      __HAL_TIM_SET_AUTORELOAD(&htim2, temp_pwm_autoreload);
+		}
+	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, PWM_CNT);
+		pre_pwm_autoreload = temp_pwm_autoreload;
+
+
       HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
       if (boost_cnt == 0)
       {
-        printf("[ERR] boost timeout!!\n");
+        p("[ERR] boost timeout!!\n");
         __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
       }
     }

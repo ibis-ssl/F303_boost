@@ -95,6 +95,7 @@ void Error_Handler(void);
 #define SW_2_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
+void p(const char *format, ...);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
