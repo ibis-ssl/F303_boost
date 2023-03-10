@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2022 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.h
+ * @brief          : Header for main.c file.
+ *                   This file contains the common defines of the application.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2022 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -23,34 +23,35 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f3xx_hal.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+  /* Private includes ----------------------------------------------------------*/
+  /* USER CODE BEGIN Includes */
 
-/* USER CODE END Includes */
+  /* USER CODE END Includes */
 
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
+  /* Exported types ------------------------------------------------------------*/
+  /* USER CODE BEGIN ET */
 
-/* USER CODE END ET */
+  /* USER CODE END ET */
 
-/* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
+  /* Exported constants --------------------------------------------------------*/
+  /* USER CODE BEGIN EC */
 
-/* USER CODE END EC */
+  /* USER CODE END EC */
 
-/* Exported macro ------------------------------------------------------------*/
-/* USER CODE BEGIN EM */
+  /* Exported macro ------------------------------------------------------------*/
+  /* USER CODE BEGIN EM */
 
-/* USER CODE END EM */
+  /* USER CODE END EM */
 
-/* Exported functions prototypes ---------------------------------------------*/
-void Error_Handler(void);
+  /* Exported functions prototypes ---------------------------------------------*/
+  void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
@@ -93,10 +94,36 @@ void Error_Handler(void);
 #define SW_1_GPIO_Port GPIOB
 #define SW_2_Pin GPIO_PIN_9
 #define SW_2_GPIO_Port GPIOB
-/* USER CODE BEGIN Private defines */
+  /* USER CODE BEGIN Private defines */
+  typedef enum
+  {
+    NONE = 0,
+    UNDER_VOLTAGE = 0x001,
+    OVER_VOLTAGE = 0x002,
+    OVER_CURRENT = 0x004,
+    SHORT_CURCUIT = 0x008,
+    CHARGE_TIME = 0x010,
+    CHARGE_POWER = 0x020,
+    DISCHARGE = 0x040,
+    PARAMETER = 0x080,
+    COMMAND = 0x100,
+    NO_CAP = 0x200,
+    DISCHARGE_FAIL = 0x400,
+    GD_POWER_FAIL = 0x800,
+  };
 
-void p(const char *format, ...);
-/* USER CODE END Private defines */
+  typedef enum
+  {
+    POWER_OUT = 0,
+    MIN_VOLTAGE,
+    MAX_VOLTAGE,
+    MAX_CURRENT,
+    MAX_TEMP_FET,
+    MAX_TEMP_SOLENOID,
+    SYSTEM_CUT = 0xFF,
+  };
+  void p(const char *format, ...);
+  /* USER CODE END Private defines */
 
 #ifdef __cplusplus
 }
