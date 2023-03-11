@@ -23,35 +23,34 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f3xx_hal.h"
 
-  /* Private includes ----------------------------------------------------------*/
-  /* USER CODE BEGIN Includes */
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
 
-  /* USER CODE END Includes */
+/* USER CODE END Includes */
 
-  /* Exported types ------------------------------------------------------------*/
-  /* USER CODE BEGIN ET */
+/* Exported types ------------------------------------------------------------*/
+/* USER CODE BEGIN ET */
 
-  /* USER CODE END ET */
+/* USER CODE END ET */
 
-  /* Exported constants --------------------------------------------------------*/
-  /* USER CODE BEGIN EC */
+/* Exported constants --------------------------------------------------------*/
+/* USER CODE BEGIN EC */
 
-  /* USER CODE END EC */
+/* USER CODE END EC */
 
-  /* Exported macro ------------------------------------------------------------*/
-  /* USER CODE BEGIN EM */
+/* Exported macro ------------------------------------------------------------*/
+/* USER CODE BEGIN EM */
 
-  /* USER CODE END EM */
+/* USER CODE END EM */
 
-  /* Exported functions prototypes ---------------------------------------------*/
-  void Error_Handler(void);
+/* Exported functions prototypes ---------------------------------------------*/
+void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
@@ -94,36 +93,36 @@ extern "C"
 #define SW_1_GPIO_Port GPIOB
 #define SW_2_Pin GPIO_PIN_9
 #define SW_2_GPIO_Port GPIOB
-  /* USER CODE BEGIN Private defines */
-  typedef enum
-  {
-    NONE = 0,
-    UNDER_VOLTAGE = 0x001,
-    OVER_VOLTAGE = 0x002,
-    OVER_CURRENT = 0x004,
-    SHORT_CURCUIT = 0x008,
-    CHARGE_TIME = 0x010,
-    CHARGE_POWER = 0x020,
-    DISCHARGE = 0x040,
-    PARAMETER = 0x080,
-    COMMAND = 0x100,
-    NO_CAP = 0x200,
-    DISCHARGE_FAIL = 0x400,
-    GD_POWER_FAIL = 0x800,
-  };
+/* USER CODE BEGIN Private defines */
+enum {
+  NONE = 0,
+  UNDER_VOLTAGE = 0x0001,
+  OVER_VOLTAGE = 0x0002,
+  OVER_CURRENT = 0x0004,
+  SHORT_CURCUIT = 0x0008,
+  CHARGE_TIME = 0x0010,
+  CHARGE_POWER = 0x0020,
+  DISCHARGE = 0x0040,
+  PARAMETER = 0x0080,
+  COMMAND = 0x0100,
+  NO_CAP = 0x0200,
+  DISCHARGE_FAIL = 0x0400,
+  GD_POWER_FAIL = 0x0800,
+  COIL_OVER_HEAT = 0x1000,
+  FET_OVER_HEAT = 0x2000,
+};
 
-  typedef enum
-  {
-    POWER_OUT = 0,
-    MIN_VOLTAGE,
-    MAX_VOLTAGE,
-    MAX_CURRENT,
-    MAX_TEMP_FET,
-    MAX_TEMP_SOLENOID,
-    SYSTEM_CUT = 0xFF,
-  };
-  void p(const char *format, ...);
-  /* USER CODE END Private defines */
+enum {
+  POWER_OUT = 0,
+  MIN_VOLTAGE,
+  MAX_VOLTAGE,
+  MAX_CURRENT,
+  MAX_TEMP_FET,
+  MAX_TEMP_SOLENOID,
+  SYSTEM_CUT = 0xFF,
+};
+void p(const char *format, ...);
+/* USER CODE END Private defines */
 
 #ifdef __cplusplus
 }

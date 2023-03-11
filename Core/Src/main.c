@@ -52,21 +52,6 @@ static char second_buf[UART_TEMP_BUF_SIZE];
 volatile int second_buf_len = 0, first_buf_len = 0;
 volatile bool sending_second_buf = false, sending_first_buf = false;
 volatile bool is_in_printf_func = false;
-/*
-int _write(int file, char *ptr, int len)
-{
-  if (huart1.hdmatx->State == HAL_DMA_BURST_STATE_BUSY)
-  {
-    if (len >= UART_TEMP_BUF_SIZE)
-      len = UART_TEMP_BUF_SIZE;
-    memcpy(temp_buf, ptr, len);
-    re_queue_len = len;
-    return len;
-  }
-  memcpy(first_buf, ptr, len);							   // 8ms
-  HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, len); // 2ms
-  return len;
-}*/
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 
@@ -195,6 +180,7 @@ typedef union {
   struct {
     int16_t delta_x;
     int16_t delta_y;
+    uint16_t quality;
   } mouse;
 } uint8_to_float_t;
 
@@ -213,6 +199,7 @@ void setTargetVoltage(float target) {
 volatile struct {
   uint32_t print_loop_cnt, kick_cnt;
   int boost_cnt;
+  bool power_enabled;
   uint16_t error;
 } stat;
 
@@ -221,7 +208,7 @@ void startKick(uint8_t power) {
     stat.kick_cnt = 100;
     stat.boost_cnt = 0;
     power_cmd.kick_power = TIM_KICK_PERI * power / 255;
-    //p("start kick! : %d\n", power_cmd.kick_power);
+    // p("start kick! : %d\n", power_cmd.kick_power);
   }
 }
 
@@ -299,7 +286,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
       }
       break;
     case 3: // kick !
-      //p("[CAN] kick!\n");
+      // p("[CAN] kick!\n");
       startKick(255);
       break;
     default:
@@ -314,8 +301,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 CAN_TxHeaderTypeDef can_header;
 uint8_t can_data[8];
 uint32_t can_mailbox;
-
 void sendCan(void) {
+
   can_header.StdId = 0x200;
   can_header.RTR = CAN_RTR_DATA;
   can_header.DLC = 8;
@@ -327,13 +314,14 @@ void sendCan(void) {
   HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
 }
 
-void sendCanMouse(int16_t delta_x, int16_t delta_y) {
+void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality) {
   can_header.StdId = 0x240;
   can_header.RTR = CAN_RTR_DATA;
   can_header.DLC = 4;
   can_header.TransmitGlobalTime = DISABLE;
   tx.mouse.delta_x = delta_x;
   tx.mouse.delta_y = delta_y;
+  tx.mouse.quality = quality;
   HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
 }
 
@@ -387,44 +375,73 @@ void updateADCs(void) {
 
 void protecter(void) {
   static uint16_t pre_sys_error = NONE;
-  if (sensor.batt_v < 20) {
-    p("\n\n[ERR] UNDER_VOLTAGE\n\n");
+  if (sensor.batt_v < 20 && stat.power_enabled) {
     stat.error |= UNDER_VOLTAGE;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] UNDER_VOLTAGE\n\n");
+    }
   }
   if (sensor.batt_v > 35) {
-    p("\n\n[ERR] OVER_VOLTAGE\n\n");
     stat.error |= OVER_VOLTAGE;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] OVER_VOLTAGE\n\n");
+    }
   }
   if (sensor.batt_cs > 30) {
-    p("\n\n[ERR] SHORT_CURCUIT\n\n");
     stat.error |= SHORT_CURCUIT;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] SHORT_CURCUIT\n\n");
+    }
   }
   if (stat.boost_cnt > 10) {
     if (sensor.batt_cs > 25) {
-      p("\n\n[ERR] OVER_CURRENT\n\n");
       stat.error |= OVER_CURRENT;
+      if (pre_sys_error != stat.error) {
+        p("\n\n[ERR] OVER_CURRENT\n\n");
+      }
     }
   } else {
-    if (sensor.batt_cs > 25) {
-      p("\n\n[ERR] OVER_CURRENT\n\n");
+    if (sensor.batt_cs > 10) {
       stat.error |= OVER_CURRENT;
+      if (pre_sys_error != stat.error) {
+        p("\n\n[ERR] OVER_CURRENT\n\n");
+      }
     }
   }
   if (sensor.gd_16p < 10 || sensor.gd_16m > -5) {
-    p("\n\n[ERR] GD_POWER_FAIL\n\n");
     stat.error |= GD_POWER_FAIL;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] GD_POWER_FAIL\n\n");
+    }
   }
 
   if (sensor.boost_v > 460) {
-    p("\n\n[ERR] NO_CAP\n\n");
     stat.error |= NO_CAP;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] NO_CAP\n\n");
+    }
+  }
+
+  if (sensor.temp_coil_1 > 60 || sensor.temp_coil_2 > 60) {
+    stat.error |= COIL_OVER_HEAT;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] COIL_OVER_HEAT\n\n");
+    }
+  }
+
+  if (sensor.temp_fet > 60) {
+    stat.error |= FET_OVER_HEAT;
+    if (pre_sys_error != stat.error) {
+      p("\n\n[ERR] FET_OVER_HEAT\n\n");
+    }
   }
 
   if (stat.error && stat.error != pre_sys_error) {
+    HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET); // output disable
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
-    HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
+    sendCanError(stat.error, 0);
 
     p("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f boost %6.2f\n", sensor.batt_v, sensor.batt_cs, sensor.gd_16p,
       sensor.gd_16m, sensor.boost_v);
@@ -494,11 +511,11 @@ void kickControl(void) {
     }
     stat.kick_cnt--;
     if (stat.kick_cnt == 0) {
-      //p("kick end!!\n");
+      // p("kick end!!\n");
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
       if (power_cmd.charge_enabled) {
-        //p("continue charge!!\n");
+        // p("continue charge!!\n");
         startCharge();
       }
     }
@@ -540,11 +557,10 @@ void userInterface(void) {
     }
     // p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f
     // ",power_cmd.min_v,power_cmd.max_v,power_cmd.max_c,power_cmd.fet_temp,power_cmd.coil_temp);
-    // p("PW %3d BV %3.0f, CK %d, CH %d /", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected,
-    // power_cmd.charge_enabled);
-    p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
+    p("PW %3d BV %3.0f, CK %d, CH %d / ", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled);
+    p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f / ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
       peak.batt_cs_max);
-    // p("%+3d %+3d %4d / ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
+    p("%+3d %+3d %4d / ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
     p("BattV %3.1f, BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
       sensor.temp_coil_1, sensor.temp_coil_2);
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
@@ -552,10 +568,7 @@ void userInterface(void) {
     // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
     stat.print_loop_cnt = 0;
 
-    if (power_cmd.sw_enable_cnt > 0) {
-      power_cmd.sw_enable_cnt -= 10;
-    }
-    if (power_cmd.sw_enable_cnt == 0 && stat.error) {
+    if (!stat.power_enabled && stat.error) {
       p("!! clear Error : %d !!\n", stat.error);
       stat.error = 0;
     }
@@ -568,7 +581,7 @@ void userInterface(void) {
   }
 }
 
-bool connectionTest(void) {
+void connectionTest(void) {
   while (1) {
     updateADCs();
     HAL_Delay(100);
@@ -794,7 +807,7 @@ int main(void) {
     /* USER CODE BEGIN 3 */
 
     update_ADNS3080();
-    sendCanMouse(get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080());
+    sendCanMouse(get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
 
     HAL_Delay(1);
 
@@ -802,7 +815,16 @@ int main(void) {
     protecter();
     userInterface();
 
-    if (stat.error) {
+    if (power_cmd.sw_enable_cnt > 0) {
+      power_cmd.sw_enable_cnt -= 1;
+      HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
+      stat.power_enabled = true;
+    } else {
+      HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET);
+      stat.power_enabled = false;
+    }
+
+    if (stat.error || !stat.power_enabled) {
       continue;
     }
 
