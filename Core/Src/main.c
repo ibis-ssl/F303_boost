@@ -40,84 +40,6 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-/*int _write(int file, char *ptr, int len)
-{
-  HAL_UART_Transmit_DMA(&huart1, (uint8_t *)ptr, len); // 2ms
-  return len;
-}*/
-
-#define UART_TEMP_BUF_SIZE (800)
-static char first_buf[UART_TEMP_BUF_SIZE];
-static char second_buf[UART_TEMP_BUF_SIZE];
-volatile int second_buf_len = 0, first_buf_len = 0;
-volatile bool sending_second_buf = false, sending_first_buf = false;
-volatile bool is_in_printf_func = false;
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-
-  if (sending_first_buf) {     // FIRST buf complete
-    sending_first_buf = false; // complete!
-
-    if (second_buf_len > 0 && is_in_printf_func == false) { // another buffer?
-      sending_second_buf = true;
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t *)second_buf, second_buf_len);
-      second_buf_len = 0;
-    }
-  } else if (sending_second_buf) { // SECOND buf complete
-    sending_second_buf = false;    // complete!
-
-    if (first_buf_len > 0 && is_in_printf_func == false) { // another buffer?
-      sending_first_buf = true;
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, first_buf_len);
-      first_buf_len = 0;
-    }
-  }
-}
-
-void p(const char *format, ...) {
-  va_list ap;
-  va_start(ap, format);
-  is_in_printf_func = true;
-
-  if (sending_first_buf) {
-    if (second_buf_len > UART_TEMP_BUF_SIZE / 2) {
-      is_in_printf_func = false;
-      return;
-    }
-    second_buf_len += vsprintf(second_buf + second_buf_len, format, ap);
-    va_end(ap);
-    if (sending_first_buf == false) {
-      second_buf_len = (int)strlen(second_buf);
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t *)second_buf, second_buf_len); // 2ms
-    }
-  } else if (sending_second_buf) {
-    if (first_buf_len > UART_TEMP_BUF_SIZE / 2) {
-
-      is_in_printf_func = false;
-      return;
-    }
-
-    first_buf_len += vsprintf(first_buf + first_buf_len, format, ap);
-    va_end(ap);
-
-    if (sending_second_buf == false) {
-      first_buf_len = (int)strlen(first_buf);
-      HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, first_buf_len); // 2ms
-    }
-  } else {
-    // start !!
-    first_buf_len = vsprintf(first_buf, format, ap);
-    va_end(ap);
-    sending_first_buf = true;
-    HAL_UART_Transmit_DMA(&huart1, (uint8_t *)first_buf, first_buf_len); // 2ms
-    first_buf_len = (int)strlen(first_buf);
-    first_buf_len = 0;
-    second_buf_len = 0;
-  }
-  is_in_printf_func = false;
-  return;
-}
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -558,9 +480,10 @@ void userInterface(void) {
     // p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f
     // ",power_cmd.min_v,power_cmd.max_v,power_cmd.max_c,power_cmd.fet_temp,power_cmd.coil_temp);
     p("PW %3d BV %3.0f, CK %d, CH %d / ", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled);
-    p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f / ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
-      peak.batt_cs_max);
+    /*p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f / ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
+      peak.batt_cs_max);*/
     p("%+3d %+3d %4d / ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
+    p("TargetV %5.1f, ",power_cmd.target_voltage);
     p("BattV %3.1f, BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
       sensor.temp_coil_1, sensor.temp_coil_2);
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
@@ -755,7 +678,7 @@ int main(void) {
 
       HAL_Delay(100);
       sendCan();
-      printf("can rx : %d\n",can_rx_cnt);
+      p("can rx : %d\n",can_rx_cnt);
       can_rx_cnt = 0;
   }*/
   if (is_connect_ADNS3080()) {
