@@ -498,11 +498,13 @@ void userInterface(void) {
   }
   // charge-indication
   if (sensor.boost_v > 100) {
-    HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
   } else {
-    HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
   }
 }
+
+
 
 void connectionTest(void) {
   while (1) {
@@ -534,6 +536,7 @@ void connectionTest(void) {
       p("PowerOn-test FAIL!! : ");
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
       while (1)
         ;
     }
@@ -559,6 +562,7 @@ void connectionTest(void) {
       p("DisCharge-test FAIL!! : ");
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
       while (1)
         ;
     }
@@ -580,6 +584,7 @@ void connectionTest(void) {
       p("Capacitor-test FAIL!! %d : ", timeout_cnt);
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
       while (1)
         ;
     }
@@ -748,7 +753,12 @@ int main(void) {
     }
 
     if (stat.error || !stat.power_enabled) {
-      continue;
+        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+        stat.boost_cnt = 0;
+        stat.kick_cnt = 0;
+        continue;
+    }else{
+        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
     }
 
     kickControl();
