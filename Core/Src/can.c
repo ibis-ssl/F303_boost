@@ -27,7 +27,8 @@
 CAN_HandleTypeDef hcan;
 
 /* CAN init function */
-void MX_CAN_Init(void) {
+void MX_CAN_Init(void)
+{
 
   /* USER CODE BEGIN CAN_Init 0 */
 
@@ -48,21 +49,25 @@ void MX_CAN_Init(void) {
   hcan.Init.AutoRetransmission = DISABLE;
   hcan.Init.ReceiveFifoLocked = DISABLE;
   hcan.Init.TransmitFifoPriority = DISABLE;
-  if (HAL_CAN_Init(&hcan) != HAL_OK) {
+  if (HAL_CAN_Init(&hcan) != HAL_OK)
+  {
     Error_Handler();
   }
   /* USER CODE BEGIN CAN_Init 2 */
 
   /* USER CODE END CAN_Init 2 */
+
 }
 
-void HAL_CAN_MspInit(CAN_HandleTypeDef *canHandle) {
+void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
+{
 
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  if (canHandle->Instance == CAN) {
-    /* USER CODE BEGIN CAN_MspInit 0 */
+  if(canHandle->Instance==CAN)
+  {
+  /* USER CODE BEGIN CAN_MspInit 0 */
 
-    /* USER CODE END CAN_MspInit 0 */
+  /* USER CODE END CAN_MspInit 0 */
     /* CAN clock enable */
     __HAL_RCC_CAN1_CLK_ENABLE();
 
@@ -71,7 +76,7 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef *canHandle) {
     PA11     ------> CAN_RX
     PA12     ------> CAN_TX
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
@@ -81,18 +86,20 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef *canHandle) {
     /* CAN interrupt Init */
     HAL_NVIC_SetPriority(USB_LP_CAN_RX0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(USB_LP_CAN_RX0_IRQn);
-    /* USER CODE BEGIN CAN_MspInit 1 */
+  /* USER CODE BEGIN CAN_MspInit 1 */
 
-    /* USER CODE END CAN_MspInit 1 */
+  /* USER CODE END CAN_MspInit 1 */
   }
 }
 
-void HAL_CAN_MspDeInit(CAN_HandleTypeDef *canHandle) {
+void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
+{
 
-  if (canHandle->Instance == CAN) {
-    /* USER CODE BEGIN CAN_MspDeInit 0 */
+  if(canHandle->Instance==CAN)
+  {
+  /* USER CODE BEGIN CAN_MspDeInit 0 */
 
-    /* USER CODE END CAN_MspDeInit 0 */
+  /* USER CODE END CAN_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_CAN1_CLK_DISABLE();
 
@@ -100,13 +107,13 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef *canHandle) {
     PA11     ------> CAN_RX
     PA12     ------> CAN_TX
     */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11|GPIO_PIN_12);
 
     /* CAN interrupt Deinit */
     HAL_NVIC_DisableIRQ(USB_LP_CAN_RX0_IRQn);
-    /* USER CODE BEGIN CAN_MspDeInit 1 */
+  /* USER CODE BEGIN CAN_MspDeInit 1 */
 
-    /* USER CODE END CAN_MspDeInit 1 */
+  /* USER CODE END CAN_MspDeInit 1 */
   }
 }
 

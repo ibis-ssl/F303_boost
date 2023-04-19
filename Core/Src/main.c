@@ -21,10 +21,10 @@
 #include "adc.h"
 #include "can.h"
 #include "dma.h"
-#include "gpio.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -49,7 +49,7 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define TIM_KICK_PERI (2000)
-#define PWM_CNT (700)
+#define PWM_CNT (850)
 // <750
 // 750 -> 0.76~0.78s(450V)
 
@@ -261,11 +261,15 @@ void updateADCs(void) {
   sensor.batt_v = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1) * 3.3 / 4096 * 11 / 1;
   sensor.gd_16p = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2) * 3.3 / 4096 * 11 / 1;
   sensor.gd_16m = (((float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_3) * 3.3 / 4096) * 21 - sensor.gd_16p * 11) / 10;
-  sensor.boost_v = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096 * 1.038; // 1.038 is calib
+  sensor.boost_v = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096;// * 1.038; // 1.038 is calib(v3),
   // INA199x1 : 50 V/V
   //  2m ohm x 50VV -> 100m V / A
   // 33A-max (v3 board)
-  sensor.batt_cs = ((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_1) * 3.3 / 4096) * 10;
+
+  // ZXCT1085 : 25V/V
+  //  2m ohm x 25VV -> 50m V / A
+  // 66A-max (v4 board)
+  sensor.batt_cs = ((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_1) * 3.3 / 4096) * 20 - 2;	// 2A offset is manual offfset (~0.14V~)
   sensor.temp_fet = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_1) * 3.3 / 4096) + 1.5) * 70 + 25;
   sensor.temp_coil_1 = (-((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
   sensor.temp_coil_2 = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
@@ -319,14 +323,14 @@ void protecter(void) {
     if (sensor.batt_cs > 25) {
       stat.error |= OVER_CURRENT;
       if (pre_sys_error != stat.error) {
-        p("\n\n[ERR] OVER_CURRENT\n\n");
+        p("\n\n[ERR] OVER_CURRENT cnt %d\n\n",stat.boost_cnt);
       }
     }
   } else {
     if (sensor.batt_cs > 10) {
       stat.error |= OVER_CURRENT;
       if (pre_sys_error != stat.error) {
-        p("\n\n[ERR] OVER_CURRENT\n\n");
+        p("\n\n[ERR] OVER_CURRENT %d\n\n",stat.boost_cnt);
       }
     }
   }
@@ -351,7 +355,7 @@ void protecter(void) {
     }
   }
 
-  if (sensor.temp_fet > 60) {
+  if (sensor.temp_fet > 80) {
     stat.error |= FET_OVER_HEAT;
     if (pre_sys_error != stat.error) {
       p("\n\n[ERR] FET_OVER_HEAT\n\n");
@@ -413,7 +417,9 @@ void boostControl(void) {
     }
   } else {
     if (stat.boost_cnt != 0) {
-      // printf("boost end!!\n\n !! %d cycle !!\n\n", stat.boost_cnt);
+    	if(stat.boost_cnt < 900){
+    	      p("boost end!! / %4.2f V / %3d\n",sensor.boost_v,1000 - stat.boost_cnt);
+    	}
       stat.boost_cnt = 0;
     }
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
@@ -462,7 +468,7 @@ void userInterface(void) {
 
   stat.print_loop_cnt++;
   // debug print
-  if (stat.print_loop_cnt > 100) {
+  if (stat.print_loop_cnt > 10) {
     // printf("%8ld %8ld %8ld /
     // ",HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_3));
     // printf("%8ld %8ld %8ld /
@@ -524,7 +530,7 @@ void connectionTest(void) {
   while (1) {
     timeout_cnt++;
     updateADCs();
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < 50 && sensor.temp_coil_1 < 70 &&
+    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < 60 && sensor.temp_coil_1 < 70 &&
         sensor.temp_coil_2 < 70) {
       p("PowerOn-test   OK!! cnt %3d : ", timeout_cnt);
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
@@ -602,10 +608,11 @@ void connectionTest(void) {
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -698,6 +705,8 @@ int main(void) {
   init_ADNS3080(true);
 
   if (HAL_GPIO_ReadPin(SW_1_GPIO_Port, SW_1_Pin) == GPIO_PIN_RESET) {
+    HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
+
     while (true) {
       // frame_print_ADNS3080();
       HAL_Delay(1);
@@ -708,6 +717,8 @@ int main(void) {
     }
   }
   if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET) {
+
+    HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
     while (true) {
       frame_print_ADNS3080();
       HAL_Delay(1);
@@ -753,6 +764,10 @@ int main(void) {
     }
 
     if (stat.error || !stat.power_enabled) {
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
+
         HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
         stat.boost_cnt = 0;
         stat.kick_cnt = 0;
@@ -768,17 +783,18 @@ int main(void) {
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -786,26 +802,31 @@ void SystemClock_Config(void) {
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1 | RCC_PERIPHCLK_ADC12 | RCC_PERIPHCLK_ADC34;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_ADC12
+                              |RCC_PERIPHCLK_ADC34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.Adc34ClockSelection = RCC_ADC34PLLCLK_DIV1;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
     Error_Handler();
   }
 }
@@ -815,10 +836,11 @@ void SystemClock_Config(void) {
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
@@ -827,15 +849,16 @@ void Error_Handler(void) {
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
-void assert_failed(uint8_t *file, uint32_t line) {
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */

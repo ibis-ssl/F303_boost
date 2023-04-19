@@ -1,0 +1,15 @@
+main.c:110:6:setTargetVoltage	3
+main.c:128:6:startKick	2
+main.c:137:6:startCharge	3
+main.c:146:6:HAL_CAN_RxFifo0MsgPendingCallback	19
+main.c:226:6:sendCan	1
+main.c:239:6:sendCanMouse	1
+main.c:260:6:updateADCs	6
+main.c:302:6:protecter	26
+main.c:388:6:boostControl	12
+main.c:430:6:kickControl	5
+main.c:457:6:userInterface	8
+main.c:515:6:connectionTest	28
+main.c:614:5:main	7
+main.c:789:6:SystemClock_Config	4
+main.c:842:6:Error_Handler	1
