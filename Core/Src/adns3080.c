@@ -110,7 +110,7 @@ void init_ADNS3080(bool ips_1600)
 }
 
 
-void update_ADNS3080(void){
+bool update_ADNS3080(void){
     
     start_transmit();
 
@@ -118,6 +118,7 @@ void update_ADNS3080(void){
     HAL_SPI_TransmitReceive(&hspi1, sbuf, rbuf, 8, 1000);
     
     end_transmit();
+    quality = rbuf[4];
     
     if (rbuf[1] & ADNS3080_BIT_MOTION)
     {
@@ -125,10 +126,12 @@ void update_ADNS3080(void){
         delta_y = (int8_t)rbuf[3];
         integral_x += delta_x;
         integral_y += delta_y;
+        return true;
     }else{
-
+    	delta_x = 0;
+    	delta_y = 0;
+    	return false;
     }
-    quality = rbuf[4];
 }
 
 

@@ -44,7 +44,6 @@ void MX_CAN_Init(void);
 
 
 void CAN_Filter_Init(void);
-void sendCanError(uint16_t type,uint32_t data);
 
 /* USER CODE END Prototypes */
 

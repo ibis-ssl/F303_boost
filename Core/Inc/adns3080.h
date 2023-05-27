@@ -7,7 +7,7 @@
 
 bool is_connect_ADNS3080(void);     // check spi comm, 3ms
 void init_ADNS3080(bool ips_1600);  // reset, wait, set to 1600ips
-void update_ADNS3080(void);
+bool update_ADNS3080(void);
 int8_t get_DeltaX_ADNS3080(void);
 int8_t get_DeltaY_ADNS3080(void);
 uint8_t get_Qualty_ADNS3080(void);

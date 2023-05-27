@@ -49,7 +49,7 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define TIM_KICK_PERI (2000)
-#define PWM_CNT (850)
+#define PWM_CNT (750)
 // <750
 // 750 -> 0.76~0.78s(450V)
 
@@ -223,15 +223,15 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 CAN_TxHeaderTypeDef can_header;
 uint8_t can_data[8];
 uint32_t can_mailbox;
-void sendCan(void) {
+void sendCanTemp(uint8_t temp_fet,uint8_t temp_coil_1,uint8_t temp_coil_2) {
 
-  can_header.StdId = 0x200;
+  can_header.StdId = 0x224;
   can_header.RTR = CAN_RTR_DATA;
   can_header.DLC = 8;
   can_header.TransmitGlobalTime = DISABLE;
-  can_data[0] = 0;
-  can_data[1] = 0;
-  can_data[2] = 1;
+  can_data[0] = temp_fet;
+  can_data[1] = temp_coil_1;
+  can_data[2] = temp_coil_2;
   can_data[3] = 1;
   HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
 }
@@ -246,6 +246,19 @@ void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality) {
   tx.mouse.quality = quality;
   HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
 }
+
+void sendCanError(uint16_t type,uint32_t data) {
+	  can_header.StdId = 0x0;
+	  can_header.RTR = CAN_RTR_DATA;
+	  can_header.DLC = 8;
+	  can_header.TransmitGlobalTime = DISABLE;
+	  can_data[0] = 0;
+	  can_data[1] = 0;
+	  can_data[2] = type;
+	  can_data[3] = type >> 8;
+	  HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
+}
+
 
 struct {
   float boost_v, batt_v, gd_16p, gd_16m, batt_cs;
@@ -299,6 +312,9 @@ void updateADCs(void) {
   }
 }
 
+#define FET_TEST_TEMP (60)
+#define COIL_OVER_HEAT_TEMP (70)
+
 void protecter(void) {
   static uint16_t pre_sys_error = NONE;
   if (sensor.batt_v < 20 && stat.power_enabled) {
@@ -327,7 +343,7 @@ void protecter(void) {
       }
     }
   } else {
-    if (sensor.batt_cs > 10) {
+    if (sensor.batt_cs > 12) {
       stat.error |= OVER_CURRENT;
       if (pre_sys_error != stat.error) {
         p("\n\n[ERR] OVER_CURRENT %d\n\n",stat.boost_cnt);
@@ -348,7 +364,7 @@ void protecter(void) {
     }
   }
 
-  if (sensor.temp_coil_1 > 60 || sensor.temp_coil_2 > 60) {
+  if (sensor.temp_coil_1 > COIL_OVER_HEAT_TEMP || sensor.temp_coil_2 > COIL_OVER_HEAT_TEMP) {
     stat.error |= COIL_OVER_HEAT;
     if (pre_sys_error != stat.error) {
       p("\n\n[ERR] COIL_OVER_HEAT\n\n");
@@ -361,6 +377,7 @@ void protecter(void) {
       p("\n\n[ERR] FET_OVER_HEAT\n\n");
     }
   }
+
 
   if (stat.error && stat.error != pre_sys_error) {
     HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET); // output disable
@@ -468,7 +485,7 @@ void userInterface(void) {
 
   stat.print_loop_cnt++;
   // debug print
-  if (stat.print_loop_cnt > 10) {
+  if (stat.print_loop_cnt > 50) {
     // printf("%8ld %8ld %8ld /
     // ",HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_3));
     // printf("%8ld %8ld %8ld /
@@ -495,6 +512,7 @@ void userInterface(void) {
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
     // adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2],
     // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
+    sendCanTemp((uint8_t)sensor.temp_fet,(uint8_t)sensor.temp_coil_1,(uint8_t)sensor.temp_coil_2);
     stat.print_loop_cnt = 0;
 
     if (!stat.power_enabled && stat.error) {
@@ -511,15 +529,14 @@ void userInterface(void) {
 }
 
 
-
 void connectionTest(void) {
   while (1) {
     updateADCs();
     HAL_Delay(100);
     p("Pre-test : BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
       sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < 50 && sensor.temp_coil_1 < 70 &&
-        sensor.temp_coil_2 < 70) {
+    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+        sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
 
       p("Pre-test OK!!\n");
       break;
@@ -530,8 +547,8 @@ void connectionTest(void) {
   while (1) {
     timeout_cnt++;
     updateADCs();
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < 60 && sensor.temp_coil_1 < 70 &&
-        sensor.temp_coil_2 < 70) {
+    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+        sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
       p("PowerOn-test   OK!! cnt %3d : ", timeout_cnt);
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
@@ -556,8 +573,8 @@ void connectionTest(void) {
     timeout_cnt++;
     updateADCs();
     HAL_Delay(1);
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < 50 && sensor.temp_coil_1 < 70 &&
-        sensor.temp_coil_2 < 70 && sensor.boost_v < 20) {
+    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+        sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP && sensor.boost_v < 20) {
       p("DisCharge-test OK!! cnt %3d : ", timeout_cnt);
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
@@ -712,8 +729,8 @@ int main(void)
       HAL_Delay(1);
 
       update_ADNS3080();
-      p("\n\n%+3d %+3d %4d\n\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
-      HAL_Delay(100);
+      p("Xv, %+3d, Yv, %+3d, QL, %4d, PosX, %5.3f, PosY, %5.3f\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080(),(float)get_X_ADNS3080() / 1000,(float)get_Y_ADNS3080()/1000);
+      HAL_Delay(10);
     }
   }
   if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET) {
