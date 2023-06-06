@@ -138,4 +138,51 @@ void CAN_Filter_Init(void) {
   }
 }
 
+void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2) {
+  CAN_TxHeaderTypeDef can_header;
+  uint8_t can_data[8];
+  uint32_t can_mailbox;
+
+  can_header.StdId = 0x224;
+  can_header.RTR = CAN_RTR_DATA;
+  can_header.DLC = 8;
+  can_header.TransmitGlobalTime = DISABLE;
+  can_data[0] = temp_fet;
+  can_data[1] = temp_coil_1;
+  can_data[2] = temp_coil_2;
+  can_data[3] = 1;
+  HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
+}
+
+void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality) {
+  CAN_TxHeaderTypeDef can_header;
+  uint8_to_float_t tx;
+  uint32_t can_mailbox;
+
+  can_header.StdId = 0x240;
+  can_header.RTR = CAN_RTR_DATA;
+  can_header.DLC = 4;
+  can_header.TransmitGlobalTime = DISABLE;
+  tx.mouse.delta_x = delta_x;
+  tx.mouse.delta_y = delta_y;
+  tx.mouse.quality = quality;
+  HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
+}
+
+void sendCanError(uint16_t type, uint32_t data) {
+  CAN_TxHeaderTypeDef can_header;
+  uint8_t can_data[8];
+  uint32_t can_mailbox;
+
+  can_header.StdId = 0x0;
+  can_header.RTR = CAN_RTR_DATA;
+  can_header.DLC = 8;
+  can_header.TransmitGlobalTime = DISABLE;
+  can_data[0] = 0;
+  can_data[1] = 0;
+  can_data[2] = type;
+  can_data[3] = type >> 8;
+  HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
+}
+
 /* USER CODE END 1 */
