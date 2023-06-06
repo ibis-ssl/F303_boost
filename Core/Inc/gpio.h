@@ -29,7 +29,7 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* USER CODE BEGIN Private defines */
@@ -39,6 +39,29 @@ extern "C" {
 void MX_GPIO_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+
+void powerOutputEnable(void);
+void powerOutputDisable(void);
+void mouseLedEnable(void);
+void mouseLedDisable(void);
+
+void setErrorLedHigh(void);
+void setErrorLedLow(void);
+
+void setOutSwLedHigh(void);
+void setOutSwLedLow(void);
+
+void setHVWarningLedHigh(void);
+void setHVWarningLedLow(void);
+
+void setCanEnCmdLedHigh(void);
+void setCanEnCmdLedLow(void);
+
+void setChargingLedHigh(void);
+void setChargingLedLow(void);
+
+bool isPushedUserSw1(void);
+bool isPushedUserSw2(void);
 
 /* USER CODE END Prototypes */
 

@@ -77,6 +77,10 @@ void Error_Handler(void);
 #define BATT_CS_GPIO_Port GPIOB
 #define POWER_SW_EN_Pin GPIO_PIN_2
 #define POWER_SW_EN_GPIO_Port GPIOB
+#define LED_4_Pin GPIO_PIN_10
+#define LED_4_GPIO_Port GPIOB
+#define LED_5_Pin GPIO_PIN_11
+#define LED_5_GPIO_Port GPIOB
 #define TEMP_FET_Pin GPIO_PIN_12
 #define TEMP_FET_GPIO_Port GPIOB
 #define TEMP_COIL_1_Pin GPIO_PIN_13

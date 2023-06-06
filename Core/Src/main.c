@@ -380,7 +380,7 @@ void protecter(void) {
 
 
   if (stat.error && stat.error != pre_sys_error) {
-    HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET); // output disable
+    powerOutputDisable(); // output disable
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
@@ -427,7 +427,7 @@ void boostControl(void) {
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, PWM_CNT);
     pre_pwm_autoreload = temp_pwm_autoreload;
 
-    HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_2_Pin, GPIO_PIN_SET);
+    setChargingLedHigh();
     if (stat.boost_cnt == 0) {
       p("[ERR] boost timeout!!\n");
       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
@@ -440,7 +440,7 @@ void boostControl(void) {
       stat.boost_cnt = 0;
     }
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
-    HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
+    setChargingLedLow();
   }
 }
 
@@ -474,11 +474,11 @@ void kickControl(void) {
 void userInterface(void) {
 
   // User SW control
-  if (HAL_GPIO_ReadPin(SW_1_GPIO_Port, SW_1_Pin) == GPIO_PIN_RESET) {
-    p("[USR] boost start!!\n");
+  if (isPushedUserSw1()) {
+    p("[USR] kick start!!\n");
     startKick(255);
   }
-  if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET) {
+  if (isPushedUserSw2()) {
     p("[USR] boost start!!\n");
     startCharge();
   }
@@ -522,9 +522,9 @@ void userInterface(void) {
   }
   // charge-indication
   if (sensor.boost_v > 100) {
-    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_SET);
+    setHVWarningLedHigh();
   } else {
-    HAL_GPIO_WritePin(LED_3_GPIO_Port, LED_3_Pin, GPIO_PIN_RESET);
+    setHVWarningLedLow();
   }
 }
 
@@ -542,7 +542,14 @@ void connectionTest(void) {
       break;
     }
   }
-  HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
+  powerOutputEnable();
+
+  setChargingLedLow();
+  setCanEnCmdLedHigh();
+  setHVWarningLedLow();
+  setOutSwLedHigh();
+  setErrorLedLow();
+
   int timeout_cnt = 0;
   while (1) {
     timeout_cnt++;
@@ -555,15 +562,21 @@ void connectionTest(void) {
       break;
     }
     if (timeout_cnt > 10) {
-      HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET);
+      powerOutputDisable();
       p("PowerOn-test FAIL!! : ");
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+      setErrorLedHigh();
       while (1)
         ;
     }
   }
+
+  setChargingLedLow();
+  setCanEnCmdLedHigh();
+  setHVWarningLedHigh();
+  setOutSwLedHigh();
+  setErrorLedLow();
 
   timeout_cnt = 0;
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, TIM_KICK_PERI / 10);
@@ -585,11 +598,18 @@ void connectionTest(void) {
       p("DisCharge-test FAIL!! : ");
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+      setErrorLedHigh();
       while (1)
         ;
     }
   }
+
+  setChargingLedHigh();
+  setCanEnCmdLedLow();
+  setHVWarningLedHigh();
+  setOutSwLedHigh();
+  setErrorLedLow();
+
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
 
@@ -602,12 +622,12 @@ void connectionTest(void) {
     timeout_cnt++;
     updateADCs();
     if (sensor.boost_v > 30 || sensor.batt_cs > 1.0) {
-      HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET);
+      powerOutputDisable();
       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
       p("Capacitor-test FAIL!! %d : ", timeout_cnt);
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
         sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-      HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
+      setErrorLedHigh();
       while (1)
         ;
     }
@@ -664,6 +684,15 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
+  mouseLedDisable();
+  powerOutputDisable();
+
+  setChargingLedHigh();
+  setCanEnCmdLedHigh();
+  setHVWarningLedHigh();
+  setOutSwLedHigh();
+  setErrorLedHigh();
+
   p("\n\nstart ORION BOOST v3\n\n");
 
   // kick
@@ -701,7 +730,6 @@ int main(void)
   HAL_ADC_Start(&hadc3);
   HAL_ADC_Start(&hadc4);
 
-  HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_RESET);
 
   /*while(1){
 
@@ -712,7 +740,8 @@ int main(void)
   }*/
   if (is_connect_ADNS3080()) {
     p("ADNS3080 OK!\n");
-  } else {
+  }
+  else {
     p("ADNS3080 not found...\n");
     while (1) {
       /* code */
@@ -721,8 +750,8 @@ int main(void)
 
   init_ADNS3080(true);
 
-  if (HAL_GPIO_ReadPin(SW_1_GPIO_Port, SW_1_Pin) == GPIO_PIN_RESET) {
-    HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
+  if (isPushedUserSw1()) {
+    mouseLedEnable();
 
     while (true) {
       // frame_print_ADNS3080();
@@ -733,12 +762,12 @@ int main(void)
       HAL_Delay(10);
     }
   }
-  if (HAL_GPIO_ReadPin(SW_2_GPIO_Port, SW_2_Pin) == GPIO_PIN_RESET) {
+  if (isPushedUserSw2()) {
 
-    HAL_GPIO_WritePin(LED_CURRENT_GPIO_Port, LED_CURRENT_Pin, GPIO_PIN_SET);
+    mouseLedEnable();
     while (true) {
       frame_print_ADNS3080();
-      HAL_Delay(1);
+      HAL_Delay(100);
 
       // update_ADNS3080();
       // p("\n\n%+3d %+3d %4d\n\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(),
@@ -771,26 +800,31 @@ int main(void)
     protecter();
     userInterface();
 
+    // power SW control (timeout)
     if (power_cmd.sw_enable_cnt > 0) {
       power_cmd.sw_enable_cnt -= 1;
-      HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_SET);
+      setCanEnCmdLedHigh();
       stat.power_enabled = true;
     } else {
-      HAL_GPIO_WritePin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin, GPIO_PIN_RESET);
+      setCanEnCmdLedLow();
       stat.power_enabled = false;
     }
 
+    // stop control
     if (stat.error || !stat.power_enabled) {
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
-		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
-
-        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_SET);
-        stat.boost_cnt = 0;
-        stat.kick_cnt = 0;
-        continue;
-    }else{
-        HAL_GPIO_WritePin(LED_1_GPIO_Port, LED_1_Pin, GPIO_PIN_RESET);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
+      powerOutputDisable();
+      setErrorLedHigh();
+      setOutSwLedLow();
+      stat.boost_cnt = 0;
+      stat.kick_cnt = 0;
+      continue;
+    } else {
+      setOutSwLedHigh();
+      setErrorLedLow();
+      powerOutputEnable();
     }
 
     kickControl();
