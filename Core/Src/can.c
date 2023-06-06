@@ -138,10 +138,11 @@ void CAN_Filter_Init(void) {
   }
 }
 
+static CAN_TxHeaderTypeDef can_header;
+static uint8_t can_data[8];
+static uint32_t can_mailbox;
+static uint8_to_float_t tx;
 void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2) {
-  CAN_TxHeaderTypeDef can_header;
-  uint8_t can_data[8];
-  uint32_t can_mailbox;
 
   can_header.StdId = 0x224;
   can_header.RTR = CAN_RTR_DATA;
@@ -155,10 +156,6 @@ void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2) {
 }
 
 void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality) {
-  CAN_TxHeaderTypeDef can_header;
-  uint8_to_float_t tx;
-  uint32_t can_mailbox;
-
   can_header.StdId = 0x240;
   can_header.RTR = CAN_RTR_DATA;
   can_header.DLC = 4;
@@ -170,9 +167,6 @@ void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality) {
 }
 
 void sendCanError(uint16_t type, uint32_t data) {
-  CAN_TxHeaderTypeDef can_header;
-  uint8_t can_data[8];
-  uint32_t can_mailbox;
 
   can_header.StdId = 0x0;
   can_header.RTR = CAN_RTR_DATA;
