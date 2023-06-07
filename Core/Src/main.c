@@ -95,6 +95,7 @@ volatile struct {
   int boost_cnt;
   bool power_enabled;
   uint16_t error;
+  uint32_t system_loop_cnt;
 } stat;
 
 void startKick(uint8_t power) {
@@ -406,20 +407,37 @@ void kickControl(void) {
 }
 
 void userInterface(void) {
+  static bool pre_sw_pushed[2],user_control_chip_select = false;
 
   // User SW control
   if (isPushedUserSw1()) {
-    p("[USR] kick start!!\n");
-    startKick(255);
+    if (!pre_sw_pushed[0]){
+      pre_sw_pushed[0] = true;
+      p("[USR] kick start!! : chip %d\n" ,user_control_chip_select);
+      startKick(255);
+      power_cmd.sw_enable_cnt = 1000;
+      power_cmd.kick_chip_selected = user_control_chip_select;
+      user_control_chip_select = !user_control_chip_select;
+    }
+  }else{
+    pre_sw_pushed[0] = false;
   }
   if (isPushedUserSw2()) {
-    p("[USR] boost start!!\n");
-    startCharge();
+    if (!pre_sw_pushed[1]) {
+      pre_sw_pushed[1] = true;
+      p("[USR] boost start!!\n");
+      startCharge();
+      power_cmd.sw_enable_cnt = 1000;
+    }
+  } else {
+    pre_sw_pushed[1] = false;
   }
 
   stat.print_loop_cnt++;
   // debug print
-  if (stat.print_loop_cnt > 50) {
+  if (stat.print_loop_cnt >= 50) {
+    stat.print_loop_cnt = 0;
+
     // printf("%8ld %8ld %8ld /
     // ",HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_3));
     // printf("%8ld %8ld %8ld /
@@ -441,13 +459,13 @@ void userInterface(void) {
       peak.batt_cs_max);*/
     p("%+3d %+3d %4d / ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
     p("TargetV %5.1f, ",power_cmd.target_voltage);
-    p("BattV %3.1f, BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
+    p("BattV %3.1f, BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
       sensor.temp_coil_1, sensor.temp_coil_2);
+    p("loop-cnt %6d \n", stat.system_loop_cnt);
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
     // adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2],
     // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
-    sendCanTemp((uint8_t)sensor.temp_fet,(uint8_t)sensor.temp_coil_1,(uint8_t)sensor.temp_coil_2);
-    stat.print_loop_cnt = 0;
+    sendCanTemp((uint8_t)sensor.temp_fet, (uint8_t)sensor.temp_coil_1, (uint8_t)sensor.temp_coil_2);
 
     if (!stat.power_enabled && stat.error) {
       p("!! clear Error : %d !!\n", stat.error);
@@ -616,6 +634,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   mouseLedDisable();
@@ -627,7 +646,12 @@ int main(void)
   setOutSwLedHigh();
   setErrorLedHigh();
 
-  p("\n\nstart ORION BOOST v3\n\n");
+  p("\n\nstart ORION BOOST v4\n\n");
+
+  HAL_TIM_Base_Start(&htim1);
+
+  // 1000ms -> 7400cnt
+  // 7.4cnt per 1ms
 
   // kick
   HAL_TIM_PWM_Init(&htim3);
@@ -664,14 +688,6 @@ int main(void)
   HAL_ADC_Start(&hadc3);
   HAL_ADC_Start(&hadc4);
 
-
-  /*while(1){
-
-      HAL_Delay(100);
-      sendCan();
-      p("can rx : %d\n",can_rx_cnt);
-      can_rx_cnt = 0;
-  }*/
   if (is_connect_ADNS3080()) {
     p("ADNS3080 OK!\n");
   }
@@ -728,7 +744,11 @@ int main(void)
     update_ADNS3080();
     sendCanMouse(get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
 
-    HAL_Delay(1);
+    // wait 2ms
+    stat.system_loop_cnt = htim1.Instance->CNT;
+    while (htim1.Instance->CNT < 2000) {
+    }
+    htim1.Instance->CNT = htim1.Instance->CNT - 1000;
 
     updateADCs();
     protecter();
@@ -805,11 +825,12 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_ADC12
-                              |RCC_PERIPHCLK_ADC34;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM1
+                              |RCC_PERIPHCLK_ADC12|RCC_PERIPHCLK_ADC34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.Adc34ClockSelection = RCC_ADC34PLLCLK_DIV1;
+  PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLK_HCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();

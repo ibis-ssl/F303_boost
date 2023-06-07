@@ -97,6 +97,7 @@ void Error_Handler(void);
 #define SW_1_GPIO_Port GPIOB
 #define SW_2_Pin GPIO_PIN_9
 #define SW_2_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 enum {
   NONE = 0,
