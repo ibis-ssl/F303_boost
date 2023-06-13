@@ -9,5 +9,5 @@ main.c:382:6:kickControl	5
 main.c:409:6:userInterface	10
 main.c:484:6:connectionTest	28
 main.c:603:5:main	8
-main.c:794:6:SystemClock_Config	4
-main.c:848:6:Error_Handler	1
+main.c:799:6:SystemClock_Config	4
+main.c:853:6:Error_Handler	1

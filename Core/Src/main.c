@@ -326,8 +326,8 @@ void protecter(void) {
     if (stat.error == UNDER_VOLTAGE) {
       // discharge!!
       p("DISCHARGE!!!\n");
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, TIM_KICK_PERI);
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, TIM_KICK_PERI);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, TIM_KICK_PERI/20);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, TIM_KICK_PERI/20);
       HAL_Delay(1000);
     } else {
       stat.kick_cnt = 0;
@@ -487,7 +487,7 @@ void connectionTest(void) {
     HAL_Delay(100);
     p("Pre-test : BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
       sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.1 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
         sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
 
       p("Pre-test OK!!\n");
@@ -538,7 +538,7 @@ void connectionTest(void) {
     timeout_cnt++;
     updateADCs();
     HAL_Delay(1);
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < 8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
         sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP && sensor.boost_v < 20) {
       p("DisCharge-test OK!! cnt %3d : ", timeout_cnt);
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
@@ -637,8 +637,11 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
-  mouseLedDisable();
   powerOutputDisable();
+
+  mouseLedEnable();
+  HAL_Delay(100);
+  mouseLedDisable();
 
   setChargingLedHigh();
   setCanEnCmdLedHigh();
@@ -772,10 +775,12 @@ int main(void)
       powerOutputDisable();
       setErrorLedHigh();
       setOutSwLedLow();
+      mouseLedDisable();
       stat.boost_cnt = 0;
       stat.kick_cnt = 0;
       continue;
     } else {
+        mouseLedEnable();
       setOutSwLedHigh();
       setErrorLedLow();
       powerOutputEnable();
