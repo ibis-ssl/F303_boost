@@ -46,7 +46,7 @@ void MX_CAN_Init(void)
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
-  hcan.Init.AutoRetransmission = DISABLE;
+  hcan.Init.AutoRetransmission = ENABLE;
   hcan.Init.ReceiveFifoLocked = DISABLE;
   hcan.Init.TransmitFifoPriority = DISABLE;
   if (HAL_CAN_Init(&hcan) != HAL_OK)
@@ -156,9 +156,9 @@ void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2) {
 }
 
 void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality) {
-  can_header.StdId = 0x240;
+  can_header.StdId = 0x241;
   can_header.RTR = CAN_RTR_DATA;
-  can_header.DLC = 4;
+  can_header.DLC = 6;
   can_header.TransmitGlobalTime = DISABLE;
   tx.mouse.delta_x = delta_x;
   tx.mouse.delta_y = delta_y;

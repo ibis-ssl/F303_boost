@@ -81,13 +81,14 @@ volatile struct {
 
 void setTargetVoltage(float target) {
   if (target > 450) {
+    return;
     target = 450;
   }
   if (target < 20) {
+    return;
     target = 20;
   }
   power_cmd.target_voltage = target;
-  // printf("set target voltage = %f\n",power_cmd.target_voltage);
 }
 
 volatile struct {
@@ -183,7 +184,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
       break;
     case 3: // kick !
       // p("[CAN] kick!\n");
-      startKick(255);
+      startKick(rx.data[1]);
       break;
     default:
       break;
@@ -454,14 +455,14 @@ void userInterface(void) {
     }
     // p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f
     // ",power_cmd.min_v,power_cmd.max_v,power_cmd.max_c,power_cmd.fet_temp,power_cmd.coil_temp);
-    p("PW %3d BV %3.0f, CK %d, CH %d / ", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled);
+    p("PW %3d BV %3.0f, CK %d, Ch %d / ", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled);
     /*p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f / ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
       peak.batt_cs_max);*/
     p("%+3d %+3d %4d / ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
-    p("TargetV %5.1f, ",power_cmd.target_voltage);
-    p("BattV %3.1f, BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
+    p("TargetV %3.0f, ",power_cmd.target_voltage);
+    p("BattV %3.1f, BoostV %3.0f, BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
       sensor.temp_coil_1, sensor.temp_coil_2);
-    p("loop-cnt %6d \n", stat.system_loop_cnt);
+    p("loop %4d X %+3d Y %+3d Q%3d\n", stat.system_loop_cnt, get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(),get_Qualty_ADNS3080());
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
     // adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2],
     // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
@@ -728,7 +729,7 @@ int main(void)
     }
   }
 
-  setTargetVoltage(450);
+  setTargetVoltage(150);
   peak.batt_v_min = 30;
   peak.gd_16m_min = -10;
   peak.gd_16p_min = 20;
