@@ -8,6 +8,6 @@ adns3080.c:138:8:get_DeltaX_ADNS3080	1
 adns3080.c:141:8:get_DeltaY_ADNS3080	1
 adns3080.c:144:9:get_Qualty_ADNS3080	1
 adns3080.c:148:6:clear_XY_ADNS3080	1
-adns3080.c:152:9:get_X_ADNS3080	1
-adns3080.c:155:9:get_Y_ADNS3080	1
+adns3080.c:152:9:get_X_ADNS3080	2
+adns3080.c:155:9:get_Y_ADNS3080	2
 adns3080.c:159:6:frame_print_ADNS3080	3

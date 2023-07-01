@@ -8,6 +8,6 @@ main.c:341:6:boostControl	12
 main.c:383:6:kickControl	5
 main.c:410:6:userInterface	10
 main.c:485:6:connectionTest	28
-main.c:604:5:main	8
-main.c:800:6:SystemClock_Config	4
-main.c:854:6:Error_Handler	1
+main.c:604:5:main	9
+main.c:806:6:SystemClock_Config	4
+main.c:860:6:Error_Handler	1
