@@ -7,7 +7,7 @@
 ../Core/Src/main.c:341:6:boostControl	16	static
 ../Core/Src/main.c:383:6:kickControl	8	static
 ../Core/Src/main.c:410:6:userInterface	96	static
-../Core/Src/main.c:485:6:connectionTest	128	static
-../Core/Src/main.c:604:5:main	56	static
-../Core/Src/main.c:806:6:SystemClock_Config	128	static
-../Core/Src/main.c:860:6:Error_Handler	4	static,ignoring_inline_asm
+../Core/Src/main.c:484:6:connectionTest	128	static
+../Core/Src/main.c:603:5:main	56	static
+../Core/Src/main.c:805:6:SystemClock_Config	128	static
+../Core/Src/main.c:859:6:Error_Handler	4	static,ignoring_inline_asm

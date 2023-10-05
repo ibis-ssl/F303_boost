@@ -11,6 +11,9 @@ bool update_ADNS3080(void);
 int8_t get_DeltaX_ADNS3080(void);
 int8_t get_DeltaY_ADNS3080(void);
 uint8_t get_Qualty_ADNS3080(void);
+float get_XX_ADNS3080(void);
+float get_YY_ADNS3080(void);
+uint16_t get_ShutterSpeed_ADNS3080(void);
 
 void clear_XY_ADNS3080(void);
 int32_t get_X_ADNS3080(void);

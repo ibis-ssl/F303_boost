@@ -29,6 +29,8 @@ uint8_t sbuf[16] = {0}, rbuf[16] = {0};
 int8_t delta_x, delta_y;
 uint8_t quality;
 int32_t integral_x, integral_y;
+uint32_t shutter_speed;
+float integral_xx, integral_yy;
 
 void start_transmit(void)
 {
@@ -54,7 +56,7 @@ static void reset(void)
     HAL_Delay(1);
     HAL_GPIO_WritePin(MOUSE_RST_GPIO_Port, MOUSE_RST_Pin, GPIO_PIN_RESET);
 
-    HAL_Delay(250); // waiting for self-test
+    HAL_Delay(550); // waiting for self-test
 }
 
 bool is_connect_ADNS3080(void){
@@ -89,8 +91,9 @@ void init_ADNS3080(bool ips_1600)
     quality = 0;
     integral_x = 0;
     integral_y = 0;
+    integral_xx = 0;
+    integral_yy = 0;
     reset();
-
 
     start_transmit();
 
@@ -126,6 +129,9 @@ bool update_ADNS3080(void){
         delta_y = (int8_t)rbuf[3];
         integral_x += delta_x;
         integral_y += delta_y;
+        shutter_speed = (rbuf[5] << 8) | rbuf[6];
+        integral_xx += (float)delta_x * shutter_speed / 500;
+        integral_yy += (float)delta_y * shutter_speed/ 500;
         return true;
     }else{
     	delta_x = 0;
@@ -155,6 +161,10 @@ int32_t get_X_ADNS3080(void){
 int32_t get_Y_ADNS3080(void){
     return integral_y;
 }
+uint16_t get_ShutterSpeed_ADNS3080(void) { return shutter_speed; }
+
+float get_XX_ADNS3080() { return integral_xx; }
+float get_YY_ADNS3080() { return integral_yy; }
 
 void frame_print_ADNS3080(void){
     char scale[] = "#987654321-,.'` ";

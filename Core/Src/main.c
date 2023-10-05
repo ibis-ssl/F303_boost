@@ -455,14 +455,13 @@ void userInterface(void) {
     }
     // p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f
     // ",power_cmd.min_v,power_cmd.max_v,power_cmd.max_c,power_cmd.fet_temp,power_cmd.coil_temp);
-    p("PW %3d BV %3.0f, CK %d, Ch %d / ", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled);
+    p("PW %3d BV %3.0f, CK %d, Ch %d / TargetV %3.0f,", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled, power_cmd.target_voltage);
     /*p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f / ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
       peak.batt_cs_max);*/
-    p("%+3d %+3d %4d / ", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
-    p("TargetV %3.0f, ",power_cmd.target_voltage);
     p("BattV %3.1f, BoostV %3.0f, BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
       sensor.temp_coil_1, sensor.temp_coil_2);
-    p("loop %4d X%+6d Y%+6d Q%3d\n", stat.system_loop_cnt, get_X_ADNS3080(), get_Y_ADNS3080(),get_Qualty_ADNS3080());
+    p("XX %+8.2f YY %+8.2f %6d", get_XX_ADNS3080(), get_YY_ADNS3080(), get_ShutterSpeed_ADNS3080());
+    p("loop %4d D x%+3d y%+3d I x%+6d y%+6d Q%3d\n", stat.system_loop_cnt, get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_X_ADNS3080(), get_Y_ADNS3080(), get_Qualty_ADNS3080());
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
     // adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2],
     // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
@@ -747,14 +746,14 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     mouse_read_cnt++;
-    if (mouse_read_cnt > 5){
+    if (mouse_read_cnt > 10){
       mouse_read_cnt = 0;
 
-      // wait 2ms
       update_ADNS3080();
       sendCanMouse(get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080());
     }
 
+    // wait 2ms cycle
     stat.system_loop_cnt = htim1.Instance->CNT;
     while (htim1.Instance->CNT < 2000) {
     }
