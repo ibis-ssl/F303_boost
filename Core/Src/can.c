@@ -141,7 +141,7 @@ void CAN_Filter_Init(void) {
 static CAN_TxHeaderTypeDef can_header;
 static uint8_t can_data[8];
 static uint32_t can_mailbox;
-static uint8_to_float_t tx;
+static can_msg_buf_t tx;
 void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2) {
 
   can_header.StdId = 0x224;
@@ -178,5 +178,23 @@ void sendCanError(uint16_t type, uint32_t data) {
   can_data[3] = type >> 8;
   HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
 }
+
+void sendFloat(uint32_t can_id, float data)
+{
+  CAN_TxHeaderTypeDef can_header;
+  uint32_t can_mailbox;
+  can_header.StdId = can_id;
+  can_header.ExtId = 0;
+  can_header.RTR = CAN_RTR_DATA;
+  can_header.DLC = 4;
+  can_header.IDE = CAN_ID_STD;
+  can_header.TransmitGlobalTime = DISABLE;
+  tx.voltage.value = data;
+  HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
+}
+
+void sendCanBatteryVoltage(float voltage) { sendFloat(0x215, voltage); }
+void sendCanKickerVoltage(float voltage) { sendFloat(0x216, voltage); }
+void sendCanBatteryCurrent(float current) { sendFloat(0x234, current); }
 
 /* USER CODE END 1 */

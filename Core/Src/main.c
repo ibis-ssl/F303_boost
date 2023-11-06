@@ -119,7 +119,7 @@ uint32_t can_rx_cnt = 0;
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
   CAN_RxHeaderTypeDef can_rx_header;
-  uint8_to_float_t rx;
+  can_msg_buf_t rx;
 
   if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &can_rx_header, rx.data) != HAL_OK) {
     /* Reception Error */
@@ -465,7 +465,6 @@ void userInterface(void) {
     // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
     // adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2],
     // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
-    sendCanTemp((uint8_t)sensor.temp_fet, (uint8_t)sensor.temp_coil_1, (uint8_t)sensor.temp_coil_2);
 
     if (!stat.power_enabled && stat.error) {
       p("!! clear Error : %d !!\n", stat.error);
@@ -480,6 +479,29 @@ void userInterface(void) {
   }
 }
 
+void canDataSender()
+{
+  static uint8_t data_idx = 0;
+  data_idx++;
+  switch (data_idx) {
+    case 1:
+      sendCanTemp((uint8_t)sensor.temp_fet, (uint8_t)sensor.temp_coil_1, (uint8_t)sensor.temp_coil_2);
+      break;
+    case 2:
+      sendCanBatteryVoltage(sensor.batt_v);
+      break;
+    case 3:
+      sendCanKickerVoltage(sensor.boost_v);
+      break;
+    case 4:
+      sendCanBatteryCurrent(sensor.batt_cs);
+      break;
+
+    default:
+      data_idx = 0;
+      break;
+  }
+}
 
 void connectionTest(void) {
   while (1) {
@@ -762,6 +784,7 @@ int main(void)
     updateADCs();
     protecter();
     userInterface();
+    canDataSender();
 
     // power SW control (timeout)
     if (power_cmd.sw_enable_cnt > 0) {

@@ -62,7 +62,13 @@ typedef union {
     int16_t delta_y;
     uint16_t quality;
   } mouse;
-} uint8_to_float_t;
+
+  struct
+  {
+    float value;
+    float nouse;
+  } voltage;
+} can_msg_buf_t;
 
 /* USER CODE END Private defines */
 
@@ -76,6 +82,9 @@ void CAN_Filter_Init(void);
 void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2);
 void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality);
 void sendCanError(uint16_t type, uint32_t data);
+void sendCanBatteryVoltage(float voltage);
+void sendCanKickerVoltage(float voltage);
+void sendCanBatteryCurrent(float current);
 
 /* USER CODE END Prototypes */
 
