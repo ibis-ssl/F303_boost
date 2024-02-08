@@ -41,6 +41,7 @@ typedef union {
 
   struct {
     uint8_t idx;
+    uint8_t unused[3];
     float value;
   } power;
   struct {
