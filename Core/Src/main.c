@@ -195,6 +195,15 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
   }
 }
 
+uint8_t uart1_rx_it_buffer;
+uint32_t uart1_rx_cnt = 0;
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef * huart)
+{
+  if (huart->Instance == USART1) {
+    uart1_rx_cnt++;
+    HAL_UART_Receive_IT(&huart1, &uart1_rx_it_buffer, 1);
+  }
+}
 
 struct {
   float boost_v, batt_v, gd_16p, gd_16m, batt_cs;
@@ -407,20 +416,22 @@ void kickControl(void) {
   }
 }
 
-void userInterface(void) {
-  static bool pre_sw_pushed[2],user_control_chip_select = false;
+void userInterface(void)
+{
+  static bool pre_sw_pushed[2], user_control_chip_select = false;
+  static uint32_t print_idx = 0;
 
   // User SW control
   if (isPushedUserSw1()) {
-    if (!pre_sw_pushed[0]){
+    if (!pre_sw_pushed[0]) {
       pre_sw_pushed[0] = true;
-      p("[USR] kick start!! : chip %d\n" ,user_control_chip_select);
+      p("[USR] kick start!! : chip %d\n", user_control_chip_select);
       startKick(255);
       power_cmd.sw_enable_cnt = 1000;
       power_cmd.kick_chip_selected = user_control_chip_select;
       user_control_chip_select = !user_control_chip_select;
     }
-  }else{
+  } else {
     pre_sw_pushed[0] = false;
   }
   if (isPushedUserSw2()) {
@@ -439,32 +450,35 @@ void userInterface(void) {
   if (stat.print_loop_cnt >= 50) {
     stat.print_loop_cnt = 0;
 
-    // printf("%8ld %8ld %8ld /
-    // ",HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc1,ADC_INJECTED_RANK_3));
-    // printf("%8ld %8ld %8ld /
-    // ",HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_2),HAL_ADCEx_InjectedGetValue(&hadc3,ADC_INJECTED_RANK_3));
-    // printf("%8ld
-    // %8ld\n",HAL_ADCEx_InjectedGetValue(&hadc4,ADC_INJECTED_RANK_1),HAL_ADCEx_InjectedGetValue(&hadc4,ADC_INJECTED_RANK_2));
-    // HAL_ADCEx_InjectedStart(&hadc1);
+    if (uart1_rx_cnt) {
+      uart1_rx_cnt = 0;
+      print_idx++;
+    }
 
-    // p("pwm = %d : ",temp_pwm_autoreload);
     if (stat.error) {
       p("E:0x%04x ", stat.error);
     } else {
       p("         ");
     }
-    // p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f
-    // ",power_cmd.min_v,power_cmd.max_v,power_cmd.max_c,power_cmd.fet_temp,power_cmd.coil_temp);
-    p("PW %3d BV %3.0f, CK %d, Ch %d / TargetV %3.0f,", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled, power_cmd.target_voltage);
-    /*p("BattVm %3.1f VM %3.1f GD+ %+4.1f GD- %+4.1f BattCS %+5.1f / ", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min,
-      peak.batt_cs_max);*/
-    p("BattV %3.1f, BoostV %3.0f, BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet,
-      sensor.temp_coil_1, sensor.temp_coil_2);
-    p("XX %+8.2f YY %+8.2f %6d", get_XX_ADNS3080(), get_YY_ADNS3080(), get_ShutterSpeed_ADNS3080());
-    p("loop %4d D x%+3d y%+3d I x%+6d y%+6d Q%3d\n", stat.system_loop_cnt, get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_X_ADNS3080(), get_Y_ADNS3080(), get_Qualty_ADNS3080());
-    // printf("adc1 : ch1 %8ld / ch2 %8ld / ch3 %8ld / adc3: ch1 %8ld / ch5 %8ld / ch12 %8ld /
-    // adc4 : ch3 %8ld / ch4 %8ld \n", adc1_raw_data[0], adc1_raw_data[1], adc1_raw_data[2],
-    // adc3_raw_data[0],adc3_raw_data[1],adc3_raw_data[2],adc4_raw_data[0],adc4_raw_data[1]);
+    switch (print_idx) {
+      case 0:
+        p("PW %3d BV %3.0f, CK %d, Ch %d / TargetV %3.0f,", power_cmd.sw_enable_cnt, power_cmd.target_voltage, power_cmd.kick_chip_selected, power_cmd.charge_enabled, power_cmd.target_voltage);
+
+        p("BattV %3.1f, BoostV %3.0f, BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+        p("XX %+8.2f YY %+8.2f %6d", get_XX_ADNS3080(), get_YY_ADNS3080(), get_ShutterSpeed_ADNS3080());
+        p("loop %4d D x%+3d y%+3d I x%+6d y%+6d Q%3d\n", stat.system_loop_cnt, get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_X_ADNS3080(), get_Y_ADNS3080(), get_Qualty_ADNS3080());
+        break;
+      
+      case 1:
+        //p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f", power_cmd.min_v, power_cmd.max_v, power_cmd.max_c, power_cmd.fet_temp, power_cmd.coil_temp);
+        p("BattV %3.1f, BoostV %3.0f, BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f / ", sensor.batt_v, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+        p("PEAK BattV-max %3.1f BattV-min %3.1f GD+ min %+4.1f GD- min %+4.1f BattCS %+5.1f \n", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min, peak.batt_cs_max);
+        break;
+
+      default:
+        print_idx = 0;
+        break;
+    }
 
     if (!stat.power_enabled && stat.error) {
       p("!! clear Error : %d !!\n", stat.error);
@@ -756,6 +770,8 @@ int main(void)
   peak.gd_16p_min = 20;
 
   connectionTest();
+
+  HAL_UART_Receive_IT(&huart1, &uart1_rx_it_buffer, 1);
 
   uint8_t mouse_read_cnt = 0;
 
