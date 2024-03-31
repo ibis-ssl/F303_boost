@@ -18,23 +18,25 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+
 #include "adc.h"
 #include "can.h"
 #include "dma.h"
+#include "gpio.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "adns3080.h"
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "adns3080.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,7 +72,8 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-volatile struct {
+volatile struct
+{
   bool charge_enabled;
   bool kick_chip_selected;
   float target_voltage;
@@ -79,8 +82,8 @@ volatile struct {
   float min_v, max_v, max_c, fet_temp, coil_temp;
 } power_cmd;
 
-
-void setTargetVoltage(float target) {
+void setTargetVoltage(float target)
+{
   if (target > 450) {
     return;
     target = 450;
@@ -92,7 +95,8 @@ void setTargetVoltage(float target) {
   power_cmd.target_voltage = target;
 }
 
-volatile struct {
+volatile struct
+{
   uint32_t print_loop_cnt, kick_cnt;
   int boost_cnt;
   bool power_enabled;
@@ -100,16 +104,18 @@ volatile struct {
   uint32_t system_loop_cnt;
 } stat;
 
-void startKick(uint8_t power) {
+void startKick(uint8_t power)
+{
   if (stat.kick_cnt == 0) {
     stat.kick_cnt = 100;
     stat.boost_cnt = 0;
     power_cmd.kick_power = TIM_KICK_PERI * power / 255;
-    // p("start kick! : %d\n", power_cmd.kick_power);
+    p("start kick! : %d\n", power_cmd.kick_power);
   }
 }
 
-void startCharge() {
+void startCharge()
+{
   if (stat.boost_cnt == 0 && stat.kick_cnt == 0) {
     // printf("boost start!!\n");
     stat.boost_cnt = 1000;
@@ -118,7 +124,8 @@ void startCharge() {
 
 uint32_t can_rx_cnt = 0;
 
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
+{
   CAN_RxHeaderTypeDef can_rx_header;
   can_msg_buf_t rx;
 
@@ -129,70 +136,70 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 
   can_rx_cnt++;
   switch (can_rx_header.StdId) {
-  case 0x000: // emg stop
-    power_cmd.charge_enabled = false;
-    break;
-  case 0x10:
-    switch (rx.data[0]) {
-    case POWER_OUT:
-      if (rx.power_en.enable) {
-        power_cmd.sw_enable_cnt = 200;
+    case 0x000:  // emg stop
+      power_cmd.charge_enabled = false;
+      break;
+    case 0x10:
+      switch (rx.data[0]) {
+        case POWER_OUT:
+          if (rx.power_en.enable) {
+            power_cmd.sw_enable_cnt = 200;
+          }
+          break;
+        case MIN_VOLTAGE:
+          power_cmd.min_v = rx.set_protect_param.value;
+          break;
+        case MAX_VOLTAGE:
+          power_cmd.max_v = rx.set_protect_param.value;
+          break;
+        case MAX_CURRENT:
+          power_cmd.max_c = rx.set_protect_param.value;
+          break;
+        case MAX_TEMP_FET:
+          power_cmd.fet_temp = rx.set_protect_param.value;
+          break;
+        case MAX_TEMP_SOLENOID:
+          power_cmd.coil_temp = rx.set_protect_param.value;
+          break;
+        default:
+          break;
       }
-      break;
-    case MIN_VOLTAGE:
-      power_cmd.min_v = rx.set_protect_param.value;
-      break;
-    case MAX_VOLTAGE:
-      power_cmd.max_v = rx.set_protect_param.value;
-      break;
-    case MAX_CURRENT:
-      power_cmd.max_c = rx.set_protect_param.value;
-      break;
-    case MAX_TEMP_FET:
-      power_cmd.fet_temp = rx.set_protect_param.value;
-      break;
-    case MAX_TEMP_SOLENOID:
-      power_cmd.coil_temp = rx.set_protect_param.value;
-      break;
-    default:
-      break;
-    }
 
-    break;
-  case 0x110: // power control
-    switch (rx.power.idx) {
-    case 0: // set boost voltage
-      setTargetVoltage(rx.power.value);
       break;
-    case 1: // charge enable
-      if (rx.data[1] == 1) {
-        // printf("[CAN] charge enable!\n");
-        power_cmd.charge_enabled = true;
-        startCharge();
-      } else {
-        // printf("[CAN] charge disable!\n");
-        power_cmd.charge_enabled = false;
+    case 0x110:  // power control
+      switch (rx.power.idx) {
+        case 0:  // set boost voltage
+          setTargetVoltage(rx.power.value);
+          break;
+        case 1:  // charge enable
+          if (rx.data[1] == 1) {
+            // printf("[CAN] charge enable!\n");
+            power_cmd.charge_enabled = true;
+            startCharge();
+          } else {
+            // printf("[CAN] charge disable!\n");
+            power_cmd.charge_enabled = false;
+          }
+          break;
+        case 2:  // kicker select
+          if (rx.data[1] == 1) {
+            // printf("[CAN] select chip kicker\n");
+            power_cmd.kick_chip_selected = true;
+          } else {
+            // printf("[CAN] select straight kicker \n");
+            power_cmd.kick_chip_selected = false;
+          }
+          break;
+        case 3:  // kick !
+          // p("[CAN] kick!\n");
+          startKick(rx.data[1]);
+          break;
+        default:
+          break;
       }
-      break;
-    case 2: // kicker select
-      if (rx.data[1] == 1) {
-        // printf("[CAN] select chip kicker\n");
-        power_cmd.kick_chip_selected = true;
-      } else {
-        // printf("[CAN] select straight kicker \n");
-        power_cmd.kick_chip_selected = false;
-      }
-      break;
-    case 3: // kick !
-      // p("[CAN] kick!\n");
-      startKick(rx.data[1]);
       break;
     default:
       break;
-    }
-    break;
-  default:
-    break;
   }
 }
 
@@ -206,21 +213,24 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef * huart)
   }
 }
 
-struct {
+struct
+{
   float boost_v, batt_v, gd_16p, gd_16m, batt_cs;
   float temp_coil_1, temp_coil_2, temp_fet;
 } sensor;
-struct {
+struct
+{
   float batt_v_min, batt_v_max;
   float gd_16p_min, gd_16m_min;
   float batt_cs_max;
 } peak;
 
-void updateADCs(void) {
+void updateADCs(void)
+{
   sensor.batt_v = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1) * 3.3 / 4096 * 11 / 1;
   sensor.gd_16p = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2) * 3.3 / 4096 * 11 / 1;
   sensor.gd_16m = (((float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_3) * 3.3 / 4096) * 21 - sensor.gd_16p * 11) / 10;
-  sensor.boost_v = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096;// * 1.038; // 1.038 is calib(v3),
+  sensor.boost_v = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096;  // * 1.038; // 1.038 is calib(v3),
   // INA199x1 : 50 V/V
   //  2m ohm x 50VV -> 100m V / A
   // 33A-max (v3 board)
@@ -228,7 +238,7 @@ void updateADCs(void) {
   // ZXCT1085 : 25V/V
   //  2m ohm x 25VV -> 50m V / A
   // 66A-max (v4 board)
-  sensor.batt_cs = ((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_1) * 3.3 / 4096) * 20 - 2;	// 2A offset is manual offfset (~0.14V~)
+  sensor.batt_cs = ((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_1) * 3.3 / 4096) * 20 - 2;  // 2A offset is manual offfset (~0.14V~)
   sensor.temp_fet = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_1) * 3.3 / 4096) + 1.5) * 70 + 25;
   sensor.temp_coil_1 = (-((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
   sensor.temp_coil_2 = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
@@ -261,7 +271,8 @@ void updateADCs(void) {
 #define FET_TEST_TEMP (80)
 #define COIL_OVER_HEAT_TEMP (80)
 
-void protecter(void) {
+void protecter(void)
+{
   static uint16_t pre_sys_error = NONE;
   if (sensor.batt_v < 20 && stat.power_enabled) {
     stat.error |= UNDER_VOLTAGE;
@@ -285,14 +296,14 @@ void protecter(void) {
     if (sensor.batt_cs > 25) {
       stat.error |= OVER_CURRENT;
       if (pre_sys_error != stat.error) {
-        p("\n\n[ERR] OVER_CURRENT cnt %d\n\n",stat.boost_cnt);
+        p("\n\n[ERR] OVER_CURRENT cnt %d\n\n", stat.boost_cnt);
       }
     }
   } else {
     if (sensor.batt_cs > 12) {
       stat.error |= OVER_CURRENT;
       if (pre_sys_error != stat.error) {
-        p("\n\n[ERR] OVER_CURRENT %d\n\n",stat.boost_cnt);
+        p("\n\n[ERR] OVER_CURRENT %d\n\n", stat.boost_cnt);
       }
     }
   }
@@ -325,19 +336,18 @@ void protecter(void) {
   }
 
   if (stat.error && stat.error != pre_sys_error) {
-    powerOutputDisable(); // output disable
+    powerOutputDisable();  // output disable
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
     sendCanError(stat.error, 0);
 
-    p("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f boost %6.2f\n", sensor.batt_v, sensor.batt_cs, sensor.gd_16p,
-      sensor.gd_16m, sensor.boost_v);
+    p("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f boost %6.2f\n", sensor.batt_v, sensor.batt_cs, sensor.gd_16p, sensor.gd_16m, sensor.boost_v);
     if (stat.error == UNDER_VOLTAGE) {
       // discharge!!
       p("DISCHARGE!!!\n");
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, TIM_KICK_PERI/20);
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, TIM_KICK_PERI/20);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, TIM_KICK_PERI / 20);
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, TIM_KICK_PERI / 20);
       HAL_Delay(1000);
     } else {
       stat.kick_cnt = 0;
@@ -347,7 +357,8 @@ void protecter(void) {
   pre_sys_error = stat.error;
 }
 
-void boostControl(void) {
+void boostControl(void)
+{
   static int temp_pwm_autoreload = 1000, pre_pwm_autoreload = 0;
 
   if (sensor.boost_v < power_cmd.target_voltage && stat.boost_cnt > 0) {
@@ -379,9 +390,9 @@ void boostControl(void) {
     }
   } else {
     if (stat.boost_cnt != 0) {
-    	if(stat.boost_cnt < 900){
-    	      p("boost end!! / %4.2f V / %3d\n",sensor.boost_v,1000 - stat.boost_cnt);
-    	}
+      if (stat.boost_cnt < 900) {
+        p("boost end!! / %4.2f V / %3d\n", sensor.boost_v, 1000 - stat.boost_cnt);
+      }
       stat.boost_cnt = 0;
     }
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
@@ -389,17 +400,24 @@ void boostControl(void) {
   }
 }
 
-void kickControl(void) {
+void kickControl(void)
+{
   if (stat.kick_cnt > 0) {
     // kick!!!
     if (power_cmd.kick_chip_selected) {
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, power_cmd.kick_power); // chip
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, power_cmd.kick_power);  // chip
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
     } else {
-      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, power_cmd.kick_power); // straight
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, power_cmd.kick_power);  // straight
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
     }
     stat.kick_cnt--;
+
+    if (sensor.boost_v < 30) {
+      stat.kick_cnt = 0;
+      p("complete discharge!!\n");
+    }
+
     if (stat.kick_cnt == 0) {
       // p("kick end!!\n");
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
@@ -423,10 +441,10 @@ void userInterface(void)
 
   // User SW control
   if (isPushedUserSw1()) {
-    if (!pre_sw_pushed[0]) {
+    if (!pre_sw_pushed[0] && power_cmd.sw_enable_cnt == 0) {
       pre_sw_pushed[0] = true;
       p("[USR] kick start!! : chip %d\n", user_control_chip_select);
-      startKick(255);
+      startKick(100);
       power_cmd.sw_enable_cnt = 1000;
       power_cmd.kick_chip_selected = user_control_chip_select;
       user_control_chip_select = !user_control_chip_select;
@@ -468,7 +486,7 @@ void userInterface(void)
         p("XX %+8.2f YY %+8.2f %6d", get_XX_ADNS3080(), get_YY_ADNS3080(), get_ShutterSpeed_ADNS3080());
         p("loop %4d D x%+3d y%+3d I x%+6d y%+6d Q%3d\n", stat.system_loop_cnt, get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_X_ADNS3080(), get_Y_ADNS3080(), get_Qualty_ADNS3080());
         break;
-      
+
       case 1:
         //p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f", power_cmd.min_v, power_cmd.max_v, power_cmd.max_c, power_cmd.fet_temp, power_cmd.coil_temp);
         p("BattV %3.1f GD-P %+4.1f GD-N %+4.1f BoostV %3.0f BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f / ", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
@@ -518,15 +536,16 @@ void canDataSender()
   }
 }
 
-void connectionTest(void) {
+void connectionTest(void)
+{
   while (1) {
     updateADCs();
     HAL_Delay(100);
-    p("Pre-test : BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-      sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
-        sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
-
+    p("Pre-test : BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+      sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+    if (
+      sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+      sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
       p("Pre-test OK!!\n");
       break;
     }
@@ -543,18 +562,19 @@ void connectionTest(void) {
   while (1) {
     timeout_cnt++;
     updateADCs();
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
-        sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
+    if (
+      sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+      sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP) {
       p("PowerOn-test   OK!! cnt %3d : ", timeout_cnt);
-      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-        sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+        sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       break;
     }
     if (timeout_cnt > 10) {
       powerOutputDisable();
       p("PowerOn-test FAIL!! : ");
-      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-        sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+        sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       setErrorLedHigh();
       while (1)
         ;
@@ -575,18 +595,19 @@ void connectionTest(void) {
     timeout_cnt++;
     updateADCs();
     HAL_Delay(1);
-    if (sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
-        sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP && sensor.boost_v < 20) {
+    if (
+      sensor.batt_v > 20 && sensor.gd_16p > 11 && sensor.gd_16m < -8 && sensor.batt_cs < 0.5 && sensor.temp_fet < FET_TEST_TEMP && sensor.temp_coil_1 < COIL_OVER_HEAT_TEMP &&
+      sensor.temp_coil_2 < COIL_OVER_HEAT_TEMP && sensor.boost_v < 20) {
       p("DisCharge-test OK!! cnt %3d : ", timeout_cnt);
-      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-        sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+        sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       break;
     }
     if (timeout_cnt > 1000) {
       // capacitor is charged & dis charge circuit not works
       p("DisCharge-test FAIL!! : ");
-      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-        sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+        sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       setErrorLedHigh();
       while (1)
         ;
@@ -607,23 +628,22 @@ void connectionTest(void) {
   __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 100);
 
   while (1) {
-
     timeout_cnt++;
     updateADCs();
     if (sensor.boost_v > 30 || sensor.batt_cs > 1.0) {
       powerOutputDisable();
       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
       p("Capacitor-test FAIL!! %d : ", timeout_cnt);
-      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-        sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+        sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       setErrorLedHigh();
       while (1)
         ;
     }
     if (timeout_cnt > 100) {
       p("Capacitor-test OK!! cnt %3d : ", timeout_cnt);
-      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p,
-        sensor.gd_16m, sensor.boost_v, sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+      p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
+        sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       break;
     }
     HAL_Delay(1);
@@ -730,8 +750,7 @@ int main(void)
 
   if (is_connect_ADNS3080()) {
     p("ADNS3080 OK!\n");
-  }
-  else {
+  } else {
     p("ADNS3080 not found...\n");
     while (1) {
       /* code */
@@ -748,12 +767,11 @@ int main(void)
       HAL_Delay(1);
 
       update_ADNS3080();
-      p("Xv, %+3d, Yv, %+3d, QL, %4d, PosX, %5.3f, PosY, %5.3f\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080(),(float)get_X_ADNS3080() / 1000 ,(float)get_Y_ADNS3080()/1000 );
+      p("Xv, %+3d, Yv, %+3d, QL, %4d, PosX, %5.3f, PosY, %5.3f\n", get_DeltaX_ADNS3080(), get_DeltaY_ADNS3080(), get_Qualty_ADNS3080(), (float)get_X_ADNS3080() / 1000, (float)get_Y_ADNS3080() / 1000);
       HAL_Delay(10);
     }
   }
   if (isPushedUserSw2()) {
-
     mouseLedEnable();
     while (true) {
       frame_print_ADNS3080();
@@ -785,7 +803,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     mouse_read_cnt++;
-    if (mouse_read_cnt > 10){
+    if (mouse_read_cnt > 10) {
       mouse_read_cnt = 0;
 
       update_ADNS3080();
@@ -826,7 +844,7 @@ int main(void)
       stat.kick_cnt = 0;
       continue;
     } else {
-        mouseLedEnable();
+      mouseLedEnable();
       setOutSwLedHigh();
       setErrorLedLow();
       powerOutputEnable();
@@ -858,32 +876,27 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM1
-                              |RCC_PERIPHCLK_ADC12|RCC_PERIPHCLK_ADC34;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1 | RCC_PERIPHCLK_TIM1 | RCC_PERIPHCLK_ADC12 | RCC_PERIPHCLK_ADC34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.Adc34ClockSelection = RCC_ADC34PLLCLK_DIV1;
   PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLK_HCLK;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
     Error_Handler();
   }
 }
@@ -906,7 +919,7 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
@@ -914,7 +927,7 @@ void Error_Handler(void)
   * @param  line: assert_param error line source number
   * @retval None
   */
-void assert_failed(uint8_t *file, uint32_t line)
+void assert_failed(uint8_t * file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
