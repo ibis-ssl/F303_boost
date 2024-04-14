@@ -39,26 +39,31 @@ extern CAN_HandleTypeDef hcan;
 typedef union {
   uint8_t data[8];
 
-  struct {
+  struct
+  {
     uint8_t idx;
     uint8_t unused[3];
     float value;
   } power;
-  struct {
+  struct
+  {
     uint16_t node_id;
-    uint16_t type;
-    uint32_t etc;
-  } error_notify;
+    uint16_t info;
+    float value;
+  } error;
 
-  struct {
+  struct
+  {
     uint8_t cmd;
     uint8_t enable;
   } power_en;
-  struct {
+  struct
+  {
     uint8_t idx;
     float value;
   } set_protect_param;
-  struct {
+  struct
+  {
     int16_t delta_x;
     int16_t delta_y;
     uint16_t quality;
@@ -77,12 +82,11 @@ void MX_CAN_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
-
 void CAN_Filter_Init(void);
 
 void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2);
 void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality);
-void sendCanError(uint16_t type, uint32_t data);
+void sendCanError(uint16_t info, float value);
 void sendCanBatteryVoltage(float voltage);
 void sendCanKickerVoltage(float voltage);
 void sendCanBatteryCurrent(float current);
@@ -94,4 +98,3 @@ void sendCanBatteryCurrent(float current);
 #endif
 
 #endif /* __CAN_H__ */
-
