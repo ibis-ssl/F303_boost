@@ -727,7 +727,7 @@ int main(void)
   setOutSwLedHigh();
   setErrorLedHigh();
 
-  p("\n\nstart ORION BOOST v4\n\n");
+  p("\n\nstart ORION BOOST %s %s\n\n", __DATE__, __TIME__);
 
   HAL_TIM_Base_Start(&htim1);
 
