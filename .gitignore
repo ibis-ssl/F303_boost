@@ -35,3 +35,9 @@
 *.cyclo
 *.mk
 *.su
+
+
+*.map
+*.elf
+*.list
+*.bin
