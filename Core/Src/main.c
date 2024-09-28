@@ -274,85 +274,85 @@ void updateADCs(void)
 
 void protecter(void)
 {
-  static uint16_t pre_sys_error = NONE;
+  static uint16_t pre_sys_error = POWER_NONE;
   if (sensor.batt_v < 18 && stat.power_enabled) {
-    stat.error |= UNDER_VOLTAGE;
+    stat.error |= POWER_UNDER_VOLTAGE;
     stat.error_value = sensor.batt_v;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] UNDER_VOLTAGE\n\n");
+      p("\n\n[ERR] POWER_UNDER_VOLTAGE\n\n");
     }
   }
   if (sensor.batt_v > 35) {
-    stat.error |= OVER_VOLTAGE;
+    stat.error |= POWER_OVER_VOLTAGE;
     stat.error_value = sensor.batt_v;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] OVER_VOLTAGE\n\n");
+      p("\n\n[ERR] POWER_OVER_VOLTAGE\n\n");
     }
   }
   if (sensor.batt_cs > 30) {
-    stat.error |= SHORT_CURCUIT;
+    stat.error |= POWER_SHORT_CURCUIT;
     stat.error_value = sensor.batt_cs;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] SHORT_CURCUIT\n\n");
+      p("\n\n[ERR] POWER_SHORT_CURCUIT\n\n");
     }
   }
   if (stat.boost_cnt > 10) {
     if (sensor.batt_cs > 25) {
-      stat.error |= OVER_CURRENT;
+      stat.error |= POWER_OVER_CURRENT;
       stat.error_value = sensor.batt_cs;
       if (pre_sys_error != stat.error) {
-        p("\n\n[ERR] OVER_CURRENT cnt %d\n\n", stat.boost_cnt);
+        p("\n\n[ERR] POWER_OVER_CURRENT cnt %d\n\n", stat.boost_cnt);
       }
     }
   } else {
     if (sensor.batt_cs > 12) {
-      stat.error |= OVER_CURRENT;
+      stat.error |= POWER_OVER_CURRENT;
       stat.error_value = sensor.batt_cs;
       if (pre_sys_error != stat.error) {
-        p("\n\n[ERR] OVER_CURRENT %d\n\n", stat.boost_cnt);
+        p("\n\n[ERR] POWER_OVER_CURRENT %d\n\n", stat.boost_cnt);
       }
     }
   }
   if (sensor.gd_16p < 10) {
-    stat.error |= GD_POWER_FAIL;
+    stat.error |= POWER_GD_POWER_FAIL;
     stat.error_value = sensor.gd_16p;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] GD_POWER_FAIL P\n\n");
+      p("\n\n[ERR] POWER_GD_POWER_FAIL P\n\n");
     }
   }
   if (sensor.gd_16m > -5) {
-    stat.error |= GD_POWER_FAIL;
+    stat.error |= POWER_GD_POWER_FAIL;
     stat.error_value = sensor.gd_16m;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] GD_POWER_FAIL M\n\n");
+      p("\n\n[ERR] POWER_GD_POWER_FAIL M\n\n");
     }
   }
 
   if (sensor.boost_v > 460) {
-    stat.error |= NO_CAP;
+    stat.error |= POWER_NO_CAP;
     stat.error_value = sensor.boost_v;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] NO_CAP\n\n");
+      p("\n\n[ERR] POWER_NO_CAP\n\n");
     }
   }
 
   if (sensor.temp_coil_1 > COIL_OVER_HEAT_TEMP || sensor.temp_coil_2 > COIL_OVER_HEAT_TEMP) {
-    stat.error |= COIL_OVER_HEAT;
+    stat.error |= POWER_COIL_OVER_HEAT;
     if (sensor.temp_coil_1 > sensor.temp_coil_2) {
       stat.error_value = sensor.temp_coil_1;
     } else {
       stat.error_value = sensor.temp_coil_2;
     }
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] COIL_OVER_HEAT\n\n");
+      p("\n\n[ERR] POWER_COIL_OVER_HEAT\n\n");
     }
   }
 
   if (sensor.temp_fet > FET_TEST_TEMP) {
-    stat.error |= FET_OVER_HEAT;
+    stat.error |= POWER_FET_OVER_HEAT;
     stat.error_value = sensor.temp_fet;
     if (pre_sys_error != stat.error) {
-      p("\n\n[ERR] FET_OVER_HEAT\n\n");
+      p("\n\n[ERR] POWER_FET_OVER_HEAT\n\n");
     }
   }
 
@@ -364,9 +364,9 @@ void protecter(void)
     sendCanError(stat.error, stat.error_value);
 
     p("[ERR] power line error!!! / battv %6.2f battcs %6.3f / GDp %+5.2f GDm %+5.2f boost %6.2f\n", sensor.batt_v, sensor.batt_cs, sensor.gd_16p, sensor.gd_16m, sensor.boost_v);
-    if (stat.error == UNDER_VOLTAGE) {
+    if (stat.error == POWER_UNDER_VOLTAGE) {
       // discharge!!
-      p("DISCHARGE!!!\n");
+      p("POWER_DISCHARGE!!!\n");
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, TIM_KICK_PERI / 20);
       __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, TIM_KICK_PERI / 20);
       HAL_Delay(1000);
@@ -597,8 +597,7 @@ void connectionTest(void)
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
         sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       setErrorLedHigh();
-      while (1)
-        ;
+      while (1);
     }
   }
 
@@ -630,8 +629,7 @@ void connectionTest(void)
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
         sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       setErrorLedHigh();
-      while (1)
-        ;
+      while (1);
     }
   }
 
@@ -658,8 +656,7 @@ void connectionTest(void)
       p("BattV %3.1f, GD+ %+4.1f GD- %+4.1f,BoostV %5.1f, BattCS %+5.1f fet %3.1f coil1 %3.1f coil2 %3.1f\n", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
         sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
       setErrorLedHigh();
-      while (1)
-        ;
+      while (1);
     }
     if (timeout_cnt > 100) {
       p("Capacitor-test OK!! cnt %3d : ", timeout_cnt);
