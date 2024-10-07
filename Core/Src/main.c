@@ -140,6 +140,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
     case 0x000:  // emg stop
       power_cmd.charge_enabled = false;
       break;
+    case 0x001:
+      // エラー時のみリセット
+      if (rx.data[0] == 0x5A && rx.data[1] == 0xA5 && stat.error != POWER_NONE) {
+        NVIC_SystemReset();
+      }
+      break;
     case 0x10:
       switch (rx.data[0]) {
         case POWER_OUT:

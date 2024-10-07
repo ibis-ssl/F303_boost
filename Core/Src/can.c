@@ -117,10 +117,10 @@ void CAN_Filter_Init(void)
   sFilterConfig.FilterMode = CAN_FILTERMODE_IDLIST;
   sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;
   sFilterConfig.FilterBank = 0;
-  sFilterConfig.FilterIdHigh = (0x00) << 5;
-  sFilterConfig.FilterIdLow = (0x100) << 5;
-  sFilterConfig.FilterMaskIdHigh = (0x010) << 5;
-  sFilterConfig.FilterMaskIdLow = (0x110) << 5;
+  sFilterConfig.FilterIdHigh = (0x000) << 5;      // エラー
+  sFilterConfig.FilterIdLow = (0x001) << 5;       // リセット
+  sFilterConfig.FilterMaskIdHigh = (0x010) << 5;  // パラメーター設定
+  sFilterConfig.FilterMaskIdLow = (0x110) << 5;   // キッカー制御
   sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
   sFilterConfig.FilterActivation = ENABLE;
   sFilterConfig.SlaveStartFilterBank = 0;
