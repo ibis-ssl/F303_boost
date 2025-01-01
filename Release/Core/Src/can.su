@@ -1,4 +1,11 @@
 ../Core/Src/can.c:30:6:MX_CAN_Init	8	static
-../Core/Src/can.c:62:6:HAL_CAN_MspInit	48	static
-../Core/Src/can.c:95:6:HAL_CAN_MspDeInit	8	static
-../Core/Src/can.c:121:6:CAN_Filter_Init	48	static
+../Core/Src/can.c:59:6:HAL_CAN_MspInit	48	static
+../Core/Src/can.c:90:6:HAL_CAN_MspDeInit	8	static
+../Core/Src/can.c:114:6:CAN_Filter_Init	48	static
+../Core/Src/can.c:139:6:sendCanTemp	8	static
+../Core/Src/can.c:152:6:sendCanMouse	8	static
+../Core/Src/can.c:164:6:sendCanError	4	static
+../Core/Src/can.c:176:6:sendFloat	4	static
+../Core/Src/can.c:188:6:sendCanBatteryVoltage	0	static
+../Core/Src/can.c:189:6:sendCanKickerVoltage	0	static
+../Core/Src/can.c:190:6:sendCanBatteryCurrent	0	static
