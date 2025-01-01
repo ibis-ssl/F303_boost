@@ -234,10 +234,19 @@ struct
 
 void updateADCs(void)
 {
-  sensor.batt_v = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1) * 3.3 / 4096 * 11 / 1;
-  sensor.gd_16p = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2) * 3.3 / 4096 * 11 / 1;
-  sensor.gd_16m = (((float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_3) * 3.3 / 4096) * 21 - sensor.gd_16p * 11) / 10;
-  sensor.boost_v = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096;  // * 1.038; // 1.038 is calib(v3),
+  float temp = 0;
+
+  temp = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_1) * 3.3 / 4096 * 11 / 1;
+  sensor.batt_v = temp;
+
+  temp = (float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_2) * 3.3 / 4096 * 11 / 1;
+  sensor.gd_16p = temp;
+
+  temp = (((float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_3) * 3.3 / 4096) * 21 - sensor.gd_16p * 11) / 10;
+  sensor.gd_16m = temp;
+
+  temp = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096;  // * 1.038; // 1.038 is calib(v3),
+  sensor.boost_v = temp;
   // INA199x1 : 50 V/V
   //  2m ohm x 50VV -> 100m V / A
   // 33A-max (v3 board)
@@ -245,10 +254,17 @@ void updateADCs(void)
   // ZXCT1085 : 25V/V
   //  2m ohm x 25VV -> 50m V / A
   // 66A-max (v4 board)
-  sensor.batt_cs = ((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_1) * 3.3 / 4096) * 20 - 2;  // 2A offset is manual offfset (~0.14V~)
-  sensor.temp_fet = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_1) * 3.3 / 4096) + 1.5) * 70 + 25;
-  sensor.temp_coil_1 = (-((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
-  sensor.temp_coil_2 = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
+  temp = ((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_1) * 3.3 / 4096) * 20 - 2;  // 2A offset is manual offfset (~0.14V~)
+  sensor.batt_cs = temp;
+
+  temp = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_1) * 3.3 / 4096) + 1.5) * 70 + 25;
+  sensor.temp_fet = sensor.temp_fet * 0.99 + temp * 0.01;
+
+  temp = (-((float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
+  sensor.temp_coil_1 = sensor.temp_coil_1 * 0.99 + temp * 0.01;
+
+  temp = (-((float)HAL_ADCEx_InjectedGetValue(&hadc4, ADC_INJECTED_RANK_2) * 3.3 / 4096) + 1.5) * 70 + 25;
+  sensor.temp_coil_2 = sensor.temp_coil_2 * 0.99 + temp * 0.01;
   // 25 deg = 10k/10k+10k = 0.5*3.3 = 1.85V
   // 75 deg = 1.7k/1.7k+10k = 0.0145*3.3 = 0.48V
   // 1.37V / 50 deg
