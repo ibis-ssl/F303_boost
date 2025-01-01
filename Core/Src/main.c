@@ -581,6 +581,9 @@ void canDataSender()
 
 void connectionTest(void)
 {
+  // 接続テスト中にリセットコマンド来たらリセットするため
+  stat.error = POWER_PRE_TEST;
+
   while (1) {
     updateADCs();
     HAL_Delay(100);
@@ -689,6 +692,8 @@ void connectionTest(void)
     HAL_Delay(1);
   }
   __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0);
+
+  stat.error = POWER_NONE;
 }
 
 /* USER CODE END 0 */
