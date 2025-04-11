@@ -245,7 +245,7 @@ void updateADCs(void)
   temp = (((float)HAL_ADCEx_InjectedGetValue(&hadc1, ADC_INJECTED_RANK_3) * 3.3 / 4096) * 21 - sensor.gd_16p * 11) / 10;
   sensor.gd_16m = temp;
 
-  temp = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096;  // * 1.038; // 1.038 is calib(v3),
+  temp = (float)HAL_ADCEx_InjectedGetValue(&hadc3, ADC_INJECTED_RANK_3) * 213 * 3.3 / 4096 * 1.1;
   sensor.boost_v = temp;
   // INA199x1 : 50 V/V
   //  2m ohm x 50VV -> 100m V / A
