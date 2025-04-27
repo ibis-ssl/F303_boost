@@ -41,3 +41,5 @@
 *.elf
 *.list
 *.bin
+
+Debug

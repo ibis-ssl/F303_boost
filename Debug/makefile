@@ -60,8 +60,8 @@ all: main-build
 main-build: orion_F303_boost_v3.elf secondary-outputs
 
 # Tool invocations
-orion_F303_boost_v3.elf orion_F303_boost_v3.map: $(OBJS) $(USER_OBJS) C:\Users\hiroyuki\Documents\STM32CudePrj\F303_boost\STM32F303CBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "orion_F303_boost_v3.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\hiroyuki\Documents\STM32CudePrj\F303_boost\STM32F303CBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="orion_F303_boost_v3.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+orion_F303_boost_v3.elf orion_F303_boost_v3.map: $(OBJS) $(USER_OBJS) C:\Users\hiroyuki\STM32CubeIDE\workspace_1.17.0\orion_F303_boost_v3\STM32F303CBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "orion_F303_boost_v3.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\hiroyuki\STM32CubeIDE\workspace_1.17.0\orion_F303_boost_v3\STM32F303CBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="orion_F303_boost_v3.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
