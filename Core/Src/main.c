@@ -533,9 +533,9 @@ void userInterface(void)
 
       case 1:
         //p("Vm %3.1f VM %3.1f CM %3.1f DF %3.1f DC %3.1f", power_cmd.min_v, power_cmd.max_v, power_cmd.max_c, power_cmd.fet_temp, power_cmd.coil_temp);
-        p("BattV %3.1f GD-P %+4.1f GD-N %+4.1f BoostV %3.0f BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f / ", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v, sensor.batt_cs,
-          sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
-        p("PEAK BattV-max %3.1f BattV-min %3.1f GD+ min %+4.1f GD- min %+4.1f BattCS %+5.1f \n", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min, peak.batt_cs_max);
+        p("BattV %3.1f GD-P %+4.1f GD-N %+4.1f BoostV %3.0f ", sensor.batt_v, sensor.gd_16p, sensor.gd_16m, sensor.boost_v);
+        p("BattCS %+5.1f fet %2.0f coil1 %2.0f coil2 %2.0f / ", sensor.batt_cs, sensor.temp_fet, sensor.temp_coil_1, sensor.temp_coil_2);
+        p("PEAK BattV-max %3.1f BattV-min %3.1f GD+ min %+4.1f GD- min %+4.1f BattCS %+5.1f\n", peak.batt_v_max, peak.batt_v_min, peak.gd_16p_min, peak.gd_16m_min, peak.batt_cs_max);
         break;
 
       default:
