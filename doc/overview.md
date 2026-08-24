@@ -65,5 +65,6 @@ Classical CAN、標準11 bit ID、1 Mbit/sを使用します。バイト列内�
 - `Script/flash.ps1`: `F303_boost.elf`をSTM32CubeProgrammerで書き込む。
 - `Script/build_and_flash.ps1`: ビルド成功後に書き込む。
 - `Script/monitor_uart.ps1`: 2,000,000 baudのUARTログを表示し、必要に応じてファイルへ保存する。
+- `Script/run_boost_sim.ps1`: FWの電圧帯別PWM制御を使った昇圧シミュレーションを実行し、PNGとCSVを出力する。
 
 書き込みは実機の出力が安全な状態で行ってください。`flash.ps1`は実行後にMCUをリセットします。

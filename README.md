@@ -30,4 +30,10 @@ UARTログを確認する場合:
 powershell -ExecutionPolicy Bypass -File .\Script\monitor_uart.ps1 -Port COM60
 ```
 
+昇圧PWMパラメータのシミュレーションとプロットを生成する場合:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Script\run_boost_sim.ps1
+```
+
 詳細は [doc/overview.md](doc/overview.md) と [doc/hardware_spec.md](doc/hardware_spec.md) を参照してください。
