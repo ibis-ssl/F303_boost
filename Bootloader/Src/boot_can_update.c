@@ -1,0 +1,46 @@
+/* 電源基板アプリをCAN経由で更新し、順序・欠落・重複・CRC・Flash異常を検出する。 */
+#include "boot_can_update.h"
+#include "board_io.h"
+#include "boot_config.h"
+#include "boot_crc32c.h"
+#include "boot_image.h"
+#include "stm32f303xc.h"
+#include <stddef.h>
+#include <stdint.h>
+#define COMMAND_ID UINT32_C(0x610)
+#define DATA_BASE UINT32_C(0x480)
+#define DATA_LAST UINT32_C(0x4FF)
+#define RESPONSE_BASE UINT32_C(0x650)
+#define BLOCK_SIZE 896U
+#define FIFO_SIZE 32U
+enum{CMD_HELLO=1,CMD_BEGIN,CMD_SET_CRC,CMD_BLOCK_BEGIN,CMD_BLOCK_END,CMD_END,CMD_REBOOT};
+enum{OK=0,ERR_COMMAND,ERR_RANGE,ERR_SEQUENCE,ERR_CRC,ERR_FLASH};
+typedef struct{uint32_t id;uint8_t data[8];}frame_t;
+static uint8_t block[BLOCK_SIZE];static frame_t fifo[FIFO_SIZE];
+static uint32_t image_size,image_crc,received,block_offset,bitmap[4];static uint16_t block_length;
+static uint8_t token,session,head,tail,count,node_id;static bool receiving,begun,overflow;
+static void can_init(void){RCC->AHBENR|=RCC_AHBENR_GPIOAEN;RCC->APB1ENR|=RCC_APB1ENR_CANEN;GPIOA->MODER=(GPIOA->MODER&~((UINT32_C(3)<<22U)|(UINT32_C(3)<<24U)))|(UINT32_C(2)<<22U)|(UINT32_C(2)<<24U);GPIOA->AFR[1]=(GPIOA->AFR[1]&~((UINT32_C(0xF)<<12U)|(UINT32_C(0xF)<<16U)))|(UINT32_C(9)<<12U)|(UINT32_C(9)<<16U);CAN->MCR=CAN_MCR_INRQ|CAN_MCR_ABOM;while((CAN->MSR&CAN_MSR_INAK)==0U){}CAN->BTR=(UINT32_C(4)<<CAN_BTR_TS1_Pos)|(UINT32_C(1)<<CAN_BTR_TS2_Pos);CAN->FMR|=CAN_FMR_FINIT;CAN->FA1R=0U;CAN->FS1R=3U;CAN->FM1R=0U;CAN->FFA1R=0U;CAN->sFilterRegister[0].FR1=COMMAND_ID<<21U;CAN->sFilterRegister[0].FR2=UINT32_C(0x7FF)<<21U;CAN->sFilterRegister[1].FR1=DATA_BASE<<21U;CAN->sFilterRegister[1].FR2=UINT32_C(0x780)<<21U;CAN->FA1R=3U;CAN->FMR&=~CAN_FMR_FINIT;CAN->MCR&=~CAN_MCR_INRQ;while((CAN->MSR&CAN_MSR_INAK)!=0U){}}
+static bool hw_read(uint32_t *id,uint8_t d[8]){if((CAN->RF0R&CAN_RF0R_FMP0_Msk)==0U)return false;const CAN_FIFOMailBox_TypeDef *m=&CAN->sFIFOMailBox[0];*id=(m->RIR>>21U)&UINT32_C(0x7FF);const uint32_t l=m->RDLR,h=m->RDHR;for(uint32_t i=0;i<4U;i++)d[i]=(uint8_t)(l>>(i*8U));
+for(uint32_t i=0;i<4U;i++)d[i+4U]=(uint8_t)(h>>(i*8U));
+CAN->RF0R|=CAN_RF0R_RFOM0;return true;}
+static void drain(void){if((CAN->RF0R&CAN_RF0R_FOVR0)!=0U){CAN->RF0R|=CAN_RF0R_FOVR0;overflow=true;}while((CAN->RF0R&CAN_RF0R_FMP0_Msk)!=0U){if(count>=FIFO_SIZE){uint32_t id;uint8_t d[8];(void)hw_read(&id,d);overflow=true;continue;}(void)hw_read(&fifo[tail].id,fifo[tail].data);tail=(uint8_t)((tail+1U)%FIFO_SIZE);count++;}}
+static bool pop(uint32_t *id,uint8_t d[8]){if(count==0U)return false;
+*id=fifo[head].id;for(uint32_t i=0;i<8U;i++)d[i]=fifo[head].data[i];head=(uint8_t)((head+1U)%FIFO_SIZE);count--;return true;}
+static void send(const uint8_t d[8]){while((CAN->TSR&CAN_TSR_TME0)==0U){}CAN_TxMailBox_TypeDef *m=&CAN->sTxMailBox[0];m->TDTR=8U;m->TDLR=(uint32_t)d[0]|((uint32_t)d[1]<<8U)|((uint32_t)d[2]<<16U)|((uint32_t)d[3]<<24U);m->TDHR=(uint32_t)d[4]|((uint32_t)d[5]<<8U)|((uint32_t)d[6]<<16U)|((uint32_t)d[7]<<24U);m->TIR=((RESPONSE_BASE+node_id)<<21U)|CAN_TI0R_TXRQ;}
+static void respond(uint8_t cmd,uint8_t status,uint32_t value){const uint8_t r[8]={(uint8_t)(cmd|0x80U),status,node_id,token,(uint8_t)value,(uint8_t)(value>>8U),(uint8_t)(value>>16U),(uint8_t)(value>>24U)};send(r);}
+static bool flash_wait(void){while((FLASH->SR&FLASH_SR_BSY)!=0U){IWDG->KR=UINT32_C(0xAAAA);}const uint32_t e=FLASH->SR&(FLASH_SR_PGERR|FLASH_SR_WRPERR);FLASH->SR=FLASH_SR_EOP|FLASH_SR_PGERR|FLASH_SR_WRPERR;IWDG->KR=UINT32_C(0xAAAA);return e==0U;}
+static void unlock(void){if((FLASH->CR&FLASH_CR_LOCK)!=0U){FLASH->KEYR=UINT32_C(0x45670123);FLASH->KEYR=UINT32_C(0xCDEF89AB);}}
+static bool erase(uint32_t a){unlock();if(!flash_wait())return false;FLASH->CR=FLASH_CR_PER;FLASH->AR=a;FLASH->CR|=FLASH_CR_STRT;const bool ok=flash_wait();FLASH->CR=0U;return ok;}
+static bool program(uint32_t a,const uint8_t *d,uint32_t n){unlock();for(uint32_t i=0;i<n;i+=2U){const uint16_t v=(uint16_t)d[i]|((uint16_t)(i+1U<n?d[i+1U]:UINT8_C(0xFF))<<8U);FLASH->CR=FLASH_CR_PG;*(volatile uint16_t *)(a+i)=v;if(!flash_wait()||*(const uint16_t *)(a+i)!=v){FLASH->CR=0U;return false;}}FLASH->CR=0U;return true;}
+static uint32_t u32(const uint8_t *p){return(uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);}
+static bool complete(void){const uint32_t n=((uint32_t)block_length+6U)/7U;for(uint32_t i=0;i<n;i++)if((bitmap[i/32U]&(UINT32_C(1)<<(i%32U)))==0U)return false;return true;}
+static bool write_metadata(void){boot_image_metadata_t m={BOOT_IMAGE_METADATA_MAGIC,BOOT_IMAGE_METADATA_FORMAT,sizeof(m),1U,BOOT_IMAGE_STATE_CONFIRMED,BOOT_APP_SLOT,BOOT_APP_BASE,image_size,image_crc,0U};m.record_crc32c=boot_crc32c(&m,offsetof(boot_image_metadata_t,record_crc32c));return erase(BOOT_METADATA_BASE)&&program(BOOT_METADATA_BASE,(const uint8_t *)&m,sizeof(m));}
+static void handle(const uint8_t d[8]){const uint8_t cmd=d[0];if(d[1]!=node_id)return;
+ if(cmd==CMD_HELLO){token=d[2];respond(cmd,OK,received);return;}
+ if(cmd==CMD_BEGIN){const uint32_t size=u32(&d[4]);token=d[2];if(begun&&d[2]==session&&size==image_size){respond(cmd,OK,received);return;}session=d[2];image_size=size;received=0U;receiving=false;if(size<8U||size>BOOT_APP_SIZE){respond(cmd,ERR_RANGE,0U);return;}if(!erase(BOOT_METADATA_BASE)){respond(cmd,ERR_FLASH,0U);return;}for(uint32_t a=BOOT_APP_BASE;a<BOOT_APP_BASE+BOOT_APP_SIZE;a+=UINT32_C(0x800))if(!erase(a)){respond(cmd,ERR_FLASH,a);return;}begun=true;respond(cmd,OK,0U);return;}
+ if(cmd==CMD_SET_CRC){token=d[2];image_crc=u32(&d[4]);respond(cmd,OK,image_crc);return;}
+ if(cmd==CMD_BLOCK_BEGIN){block_offset=u32(&d[4]);token=d[2];const uint32_t rem=block_offset<image_size?image_size-block_offset:0U;block_length=(uint16_t)(rem<BLOCK_SIZE?rem:BLOCK_SIZE);for(uint32_t i=0;i<4U;i++)bitmap[i]=0U;overflow=false;receiving=begun&&block_offset==received&&block_offset<image_size;respond(cmd,receiving?OK:ERR_RANGE,received);return;}
+ if(cmd==CMD_BLOCK_END){token=d[2];if(!receiving||overflow||!complete()){receiving=false;respond(cmd,ERR_SEQUENCE,received);return;}if(boot_crc32c(block,block_length)!=u32(&d[4])){receiving=false;respond(cmd,ERR_CRC,received);return;}if(!program(BOOT_APP_BASE+block_offset,block,block_length)){respond(cmd,ERR_FLASH,received);return;}received+=block_length;receiving=false;respond(cmd,OK,received);return;}
+ if(cmd==CMD_END){token=d[2];if(received!=image_size||boot_crc32c((const void *)BOOT_APP_BASE,image_size)!=image_crc){respond(cmd,ERR_CRC,received);return;}if(!write_metadata()){respond(cmd,ERR_FLASH,received);return;}respond(cmd,OK,received);return;}
+ if(cmd==CMD_REBOOT){token=d[2];respond(cmd,OK,received);for(volatile uint32_t x=0;x<80000U;x++){}NVIC_SystemReset();}respond(cmd,ERR_COMMAND,received);}
+bool boot_can_update_run(unsigned int idle_loops){node_id=board_update_node_id();can_init();for(unsigned int idle=0;idle<idle_loops||!boot_app_is_valid();idle++){uint32_t id;uint8_t d[8];IWDG->KR=UINT32_C(0xAAAA);drain();if(pop(&id,d)){idle=0U;if(id==COMMAND_ID){if(overflow){token=d[2];overflow=false;receiving=false;respond(d[0],ERR_SEQUENCE,received);}else handle(d);}else if(id>=DATA_BASE&&id<=DATA_LAST&&receiving&&d[0]==token){const uint32_t seq=id-DATA_BASE,pos=seq*7U;if(pos<block_length&&(bitmap[seq/32U]&(UINT32_C(1)<<(seq%32U)))==0U){for(uint32_t i=1U;i<8U&&pos+i-1U<block_length;i++)block[pos+i-1U]=d[i];bitmap[seq/32U]|=UINT32_C(1)<<(seq%32U);}}}}return boot_app_is_valid();}

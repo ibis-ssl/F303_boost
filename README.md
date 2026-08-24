@@ -37,3 +37,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Script\run_boost_sim.ps1
 ```
 
 詳細は [doc/overview.md](doc/overview.md) と [doc/hardware_spec.md](doc/hardware_spec.md) を参照してください。
+# OTAビルド
+
+CAN OTA用のアプリと常駐ブートローダーは次の順で生成します。
+
+```powershell
+.\Script\build_bootloader.ps1
+.\Script\build_application.ps1 -Configuration Debug
+.\Script\install_bootloader.ps1
+```
+
+最後のコマンドは既定でバックアップだけを行います。実機へ書き込む場合だけ、安全状態を確認した上で`-Execute`を追加します。

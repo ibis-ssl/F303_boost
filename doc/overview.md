@@ -68,3 +68,10 @@ Classical CAN、標準11 bit ID、1 Mbit/sを使用します。バイト列内�
 - `Script/run_boost_sim.ps1`: FWの電圧帯別PWM制御を使った昇圧シミュレーションを実行し、PNGとCSVを出力する。
 
 書き込みは実機の出力が安全な状態で行ってください。`flash.ps1`は実行後にMCUをリセットします。
+# CAN OTA更新
+
+先頭16KBを常駐アプリケーションブートローダー、`0x08004000`～`0x0801F7FF`をアプリ領域、末尾2KBをmetadata領域とする。OTA node IDは100、応答CAN IDは`0x6B4`である。
+
+アプリがCAN ID `0x600`、payload `OFWUP + node 100`を受信すると、PB2の電源許可をLowにし、TIM2昇圧PWM、TIM3キックPWM、TIM4負電源PWMを停止してからmetadataを消去しresetする。bootloaderもC runtime開始前に同じ出力をLowへ固定し、IWDGを継続refreshしながら更新する。32 frame software FIFO、896 byte block、bitmap、block CRC32C、全体CRC32Cにより通信異常と不完全imageを検出する。
+
+初回導入は`Script/build_bootloader.ps1`、`Script/build_application.ps1`を実行後、`Script/install_bootloader.ps1`をdry-runし、バックアップを確認してから`-Execute`を指定する。高電圧部を含む実機の電源が使用できないため、現時点では実機書込み・安全出力・CAN更新は未確認である。

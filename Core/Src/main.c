@@ -126,6 +126,39 @@ void startCharge()
 
 uint32_t can_rx_cnt = 0;
 
+#define OTA_ENTRY_CAN_ID (0x600U)
+#define OTA_NODE_ID (100U)
+#define OTA_METADATA_ADDRESS (0x0801F800U)
+
+static bool ota_entry_matches(const CAN_RxHeaderTypeDef *header, const uint8_t data[8])
+{
+  return header->StdId == OTA_ENTRY_CAN_ID && memcmp(data, "OFWUP", 5U) == 0 && data[5] == OTA_NODE_ID;
+}
+
+static void enter_firmware_update(void)
+{
+  FLASH_EraseInitTypeDef erase = {0};
+  uint32_t page_error = 0U;
+  /* 高電圧系を停止してからmetadataを無効化し、常駐bootloaderへresetする。 */
+  powerOutputDisable();
+  TIM2->CCR4 = 0U;
+  TIM3->CCR1 = 0U;
+  TIM3->CCR2 = 0U;
+  TIM2->CR1 &= ~TIM_CR1_CEN;
+  TIM3->CR1 &= ~TIM_CR1_CEN;
+  TIM4->CR1 &= ~TIM_CR1_CEN;
+  IWDG->KR = 0xAAAAU;
+  __disable_irq();
+  erase.TypeErase = FLASH_TYPEERASE_PAGES;
+  erase.PageAddress = OTA_METADATA_ADDRESS;
+  erase.NbPages = 1U;
+  (void)HAL_FLASH_Unlock();
+  (void)HAL_FLASHEx_Erase(&erase, &page_error);
+  (void)HAL_FLASH_Lock();
+  NVIC_SystemReset();
+  for (;;) {}
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
 {
   CAN_RxHeaderTypeDef can_rx_header;
@@ -134,6 +167,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
   if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &can_rx_header, rx.data) != HAL_OK) {
     /* Reception Error */
     Error_Handler();
+  }
+
+  if (ota_entry_matches(&can_rx_header, rx.data)) {
+    enter_firmware_update();
   }
 
   can_rx_cnt++;

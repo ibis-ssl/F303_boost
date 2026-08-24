@@ -127,6 +127,15 @@ void CAN_Filter_Init(void)
   if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK) {
     Error_Handler();
   }
+  /* OTA entry ID 0x600を通常制御IDとは別bankで常時受信する。 */
+  sFilterConfig.FilterBank = 1;
+  sFilterConfig.FilterIdHigh = (0x600) << 5;
+  sFilterConfig.FilterIdLow = (0x600) << 5;
+  sFilterConfig.FilterMaskIdHigh = (0x600) << 5;
+  sFilterConfig.FilterMaskIdLow = (0x600) << 5;
+  if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK) {
+    Error_Handler();
+  }
   if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
     Error_Handler();
   }
