@@ -2,7 +2,7 @@
 
 import unittest
 
-from boost_sim import BoostParameters, ControlProfile, pwm_timing, simulate
+from boost_sim import BoostParameters, ControlProfile, build_method_comparison, pwm_timing, simulate
 
 
 class BoostSimulationTest(unittest.TestCase):
@@ -64,6 +64,13 @@ class BoostSimulationTest(unittest.TestCase):
         self.assertLess(raw.final_voltage_v, 420.0)
         self.assertGreater(filtered.final_voltage_v, 445.0)
         self.assertLess(filtered.final_voltage_v, 455.0)
+
+    def test_continuous_and_stepped_clean_performance_are_close(self) -> None:
+        comparison = build_method_comparison(BoostParameters(), (22.2,), monte_carlo_seeds=2)
+        stepped = comparison["Stepped / clean"][0]
+        continuous = comparison["Continuous / clean"][0]
+        self.assertLess(abs(continuous["output_power_w"] / stepped["output_power_w"] - 1.0), 0.03)
+        self.assertLess(abs(continuous["partial_efficiency_pct"] - stepped["partial_efficiency_pct"]), 0.3)
 
 
 if __name__ == "__main__":

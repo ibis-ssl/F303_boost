@@ -535,6 +535,151 @@ def write_control_report(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def comparison_metrics(result: SimulationResult) -> dict[str, float]:
+    duration_s = result.charge_time_s if result.charge_time_s is not None else result.params.timeout_s
+    modeled_loss_w = result.average_fet_loss_power_w + result.average_coil_loss_power_w
+    denominator_w = result.average_output_power_w + modeled_loss_w
+    return {
+        "charge_time_s": duration_s,
+        "output_power_w": result.average_output_power_w,
+        "fet_loss_w": result.average_fet_loss_power_w,
+        "coil_loss_w": result.average_coil_loss_power_w,
+        "partial_efficiency_pct": result.average_output_power_w / denominator_w * 100.0,
+        "modeled_loss_energy_j": modeled_loss_w * duration_s,
+        "final_voltage_v": result.final_voltage_v,
+    }
+
+
+def build_method_comparison(base: BoostParameters, input_voltages: tuple[float, ...], monte_carlo_seeds: int = 20) -> dict[str, list[dict[str, float]]]:
+    comparison_params = replace(base, timeout_s=2.0)
+    series: dict[str, list[dict[str, float]]] = {
+        "Stepped / clean": [],
+        "Continuous / clean": [],
+        "Stepped / filtered noise": [],
+        "Continuous / filtered noise": [],
+    }
+    robust_profile_args = {
+        "noise_fraction": 0.20,
+        "measurement_average_samples": 32,
+        "filter_alpha": 0.30,
+        "stop_confirm_samples": 3,
+    }
+    for input_v in input_voltages:
+        for label, schedule in (("Stepped / clean", "stepped"), ("Continuous / clean", "continuous")):
+            result = simulate(input_v, comparison_params, ControlProfile(schedule=schedule))
+            series[label].append({"input_v": input_v, **comparison_metrics(result)})
+
+        for label, schedule in (("Stepped / filtered noise", "stepped"), ("Continuous / filtered noise", "continuous")):
+            seed_metrics = [
+                comparison_metrics(
+                    simulate(
+                        input_v,
+                        comparison_params,
+                        ControlProfile(schedule=schedule, random_seed=seed, **robust_profile_args),
+                    )
+                )
+                for seed in range(monte_carlo_seeds)
+            ]
+            averaged = {
+                key: float(np.mean([metrics[key] for metrics in seed_metrics]))
+                for key in seed_metrics[0]
+            }
+            series[label].append({"input_v": input_v, **averaged})
+    return series
+
+
+def create_method_comparison_plot(path: Path, series: dict[str, list[dict[str, float]]]) -> None:
+    plt.style.use("seaborn-v0_8-whitegrid")
+    fig, axes = plt.subplots(3, 2, figsize=(14, 13), constrained_layout=True)
+    definitions = (
+        ("output_power_w", "Average capacitor charging power", "Power [W]"),
+        ("fet_loss_w", "Average FET conduction loss", "Loss [W]"),
+        ("coil_loss_w", "Average inductor copper loss", "Loss [W]"),
+        ("partial_efficiency_pct", "Partial efficiency", "Efficiency [%]"),
+        ("charge_time_s", "Charge time to 450 V", "Time [s]"),
+        ("modeled_loss_energy_j", "Modeled loss energy per charge", "Loss energy [J]"),
+    )
+    styles = {
+        "Stepped / clean": ("o", "-"),
+        "Continuous / clean": ("s", "-"),
+        "Stepped / filtered noise": ("o", "--"),
+        "Continuous / filtered noise": ("s", "--"),
+    }
+    for axis, (metric, title, ylabel) in zip(axes.flat, definitions):
+        for label, rows in series.items():
+            marker, linestyle = styles[label]
+            axis.plot(
+                [row["input_v"] for row in rows],
+                [row[metric] for row in rows],
+                marker=marker,
+                linestyle=linestyle,
+                linewidth=1.6,
+                label=label,
+            )
+        axis.set(title=title, xlabel="Input voltage [V]", ylabel=ylabel)
+        axis.legend(loc="best")
+    fig.suptitle("Current stepped output vs continuous duty — PWM_CNT=700", fontsize=15)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def write_method_comparison_csv(path: Path, series: dict[str, list[dict[str, float]]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = (
+        "method",
+        "input_v",
+        "charge_time_s",
+        "output_power_w",
+        "fet_loss_w",
+        "coil_loss_w",
+        "partial_efficiency_pct",
+        "modeled_loss_energy_j",
+        "final_voltage_v",
+    )
+    with path.open("w", newline="", encoding="utf-8-sig") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        for label, rows in series.items():
+            for row in rows:
+                writer.writerow({"method": label, **{key: f"{row[key]:.6f}" for key in fieldnames[1:]}})
+
+
+def write_method_comparison_report(path: Path, series: dict[str, list[dict[str, float]]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "# 現行段階出力と連続Dutyの比較",
+        "",
+        "FET損失は導通損失、コイル損失は銅損のみです。部分効率にはスイッチング損、コア損、ダイオード損を含みません。ノイズあり条件は±20%独立一様ノイズを32サンプル平均し、EMA 0.30と3回連続確認を適用した20 seed平均です。",
+        "",
+        "## Vin=22.2 V",
+        "",
+        "| 方式 | 充電時間 | 平均出力 | FET損失 | コイル損失 | 部分効率 | 充電1回のモデル損失 |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for label, rows in series.items():
+        row = next(item for item in rows if abs(item["input_v"] - 22.2) < 1e-6)
+        lines.append(
+            f"| {label} | {row['charge_time_s']:.3f} s | {row['output_power_w']:.1f} W | "
+            f"{row['fet_loss_w']:.2f} W | {row['coil_loss_w']:.2f} W | "
+            f"{row['partial_efficiency_pct']:.2f}% | {row['modeled_loss_energy_j']:.2f} J |"
+        )
+
+    stepped = next(item for item in series["Stepped / clean"] if abs(item["input_v"] - 22.2) < 1e-6)
+    continuous = next(item for item in series["Continuous / clean"] if abs(item["input_v"] - 22.2) < 1e-6)
+    lines.extend((
+        "",
+        "## 差分",
+        "",
+        f"- ノイズなし連続Dutyは現行段階制御に対し、充電時間が{(continuous['charge_time_s'] / stepped['charge_time_s'] - 1.0) * 100.0:+.2f}%、平均出力が{(continuous['output_power_w'] / stepped['output_power_w'] - 1.0) * 100.0:+.2f}%です。",
+        f"- FET導通損失は{(continuous['fet_loss_w'] / stepped['fet_loss_w'] - 1.0) * 100.0:+.2f}%、コイル銅損は{(continuous['coil_loss_w'] / stepped['coil_loss_w'] - 1.0) * 100.0:+.2f}%です。",
+        f"- 部分効率差は{continuous['partial_efficiency_pct'] - stepped['partial_efficiency_pct']:+.3f}ポイント、充電1回のモデル損失エネルギー差は{continuous['modeled_loss_energy_j'] - stepped['modeled_loss_energy_j']:+.3f} Jです。",
+        "- このモデルでは両方式の差は小さく、連続Duty化の主な価値は効率改善よりも電力変化の平滑化です。ノイズ対策のADC処理と停止判定追加が必須になります。",
+        "",
+    ))
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="F303_boostの昇圧PWM・コンデンサ充電シミュレーション")
     parser.add_argument("--output-dir", type=Path, default=Path("sim/out"))
@@ -615,14 +760,18 @@ def main() -> int:
         )
         for seed in range(50)
     ]
+    method_comparison = build_method_comparison(base, input_voltages, monte_carlo_seeds=20)
 
     output_dir = args.output_dir
     create_plot(output_dir / "boost_simulation.png", input_results, sweep_results)
     create_loss_plot(output_dir / "boost_loss_simulation.png", input_results)
     create_control_comparison_plot(output_dir / "boost_control_comparison.png", control_cases, raw_monte_carlo, filtered_monte_carlo)
+    create_method_comparison_plot(output_dir / "boost_method_comparison.png", method_comparison)
     write_summary(output_dir / "boost_simulation_summary.csv", sweep_results, firmware_timeout_s)
     write_report(output_dir / "boost_simulation_report.md", input_results, sweep_results, firmware_timeout_s)
     write_control_report(output_dir / "boost_control_comparison_report.md", control_cases, raw_monte_carlo, filtered_monte_carlo)
+    write_method_comparison_csv(output_dir / "boost_method_comparison.csv", method_comparison)
+    write_method_comparison_report(output_dir / "boost_method_comparison_report.md", method_comparison)
     baseline = next(result for result in input_results if result.input_v == 22.2)
     write_timeseries(output_dir / "boost_simulation_baseline.csv", baseline)
 
@@ -635,6 +784,7 @@ def main() -> int:
         print(f"{label}: stop={stop}, final={result.final_voltage_v:.1f}V, duty_max={result.duty.max() * 100.0:.1f}%")
     print(f"loss_plot={output_dir / 'boost_loss_simulation.png'}")
     print(f"control_plot={output_dir / 'boost_control_comparison.png'}")
+    print(f"method_plot={output_dir / 'boost_method_comparison.png'}")
     return 0
 
 
