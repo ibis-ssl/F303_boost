@@ -14,9 +14,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Script\run_boost_sim.ps1
 - `sim/out/boost_loss_simulation.png`: FET導通損失、コイル銅損、合計モデル損失、部分効率のプロット。
 - `sim/out/boost_control_comparison.png`: 段階Duty、連続Duty、±20%電圧ノイズ、平滑化制御の比較プロット。
 - `sim/out/boost_control_comparison_report.md`: 連続Dutyと50 seed Monte Carloの日本語評価結果。
-- `sim/out/boost_method_comparison.png`: 現行段階出力と連続Dutyの出力、損失、効率、充電時間、損失エネルギー比較。
-- `sim/out/boost_method_comparison.csv`: 方式比較の数値データ。
-- `sim/out/boost_method_comparison_report.md`: 方式比較と差分の日本語レポート。
 - `sim/out/boost_simulation_report.md`: 結果表と解釈上の注意をまとめた日本語レポート。
 - `sim/out/boost_simulation_summary.csv`: 入力電圧と`PWM_CNT`を変え、解析を2秒まで延長した比較結果。
 - `sim/out/boost_simulation_baseline.csv`: 22.2 V、`PWM_CNT=700`の1 ms時系列。
