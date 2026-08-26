@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
+#include <stdbool.h>
 #include <string.h>
 
 /* USER CODE BEGIN 0 */
@@ -80,6 +81,8 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef * canHandle)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* CAN interrupt Init */
+    HAL_NVIC_SetPriority(USB_HP_CAN_TX_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(USB_HP_CAN_TX_IRQn);
     HAL_NVIC_SetPriority(USB_LP_CAN_RX0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(USB_LP_CAN_RX0_IRQn);
     /* USER CODE BEGIN CAN_MspInit 1 */
@@ -104,6 +107,7 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef * canHandle)
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
 
     /* CAN interrupt Deinit */
+    HAL_NVIC_DisableIRQ(USB_HP_CAN_TX_IRQn);
     HAL_NVIC_DisableIRQ(USB_LP_CAN_RX0_IRQn);
     /* USER CODE BEGIN CAN_MspDeInit 1 */
 
@@ -145,77 +149,124 @@ void CAN_Filter_Init(void)
   if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK) {
     Error_Handler();
   }
-  if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+  if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_TX_MAILBOX_EMPTY) != HAL_OK) {
     Error_Handler();
   }
 }
 
-static CAN_TxHeaderTypeDef can_header;
-static uint8_t can_data[8];
-static uint32_t can_mailbox;
-static can_msg_buf_t tx;
+#define CAN_TX_FIFO_CAPACITY 32U
+#define CAN_TX_FIFO_STORAGE (CAN_TX_FIFO_CAPACITY + 1U)
+
+typedef struct
+{
+  CAN_TxHeaderTypeDef header;
+  uint8_t data[8];
+} can_tx_frame_t;
+
+static can_tx_frame_t can_tx_fifo[CAN_TX_FIFO_STORAGE];
+static volatile uint8_t can_tx_head;
+static volatile uint8_t can_tx_tail;
+static volatile uint32_t can_tx_drop_count;
+
+static uint8_t can_tx_next(uint8_t index)
+{
+  index++;
+  return index < CAN_TX_FIFO_STORAGE ? index : 0U;
+}
+
+/* Called with interrupts disabled. Fill every free hardware mailbox in FIFO order. */
+static void can_tx_drain_locked(void)
+{
+  while (can_tx_tail != can_tx_head && HAL_CAN_GetTxMailboxesFreeLevel(&hcan) != 0U) {
+    uint32_t mailbox;
+    const can_tx_frame_t * frame = &can_tx_fifo[can_tx_tail];
+    if (HAL_CAN_AddTxMessage(&hcan, &frame->header, frame->data, &mailbox) != HAL_OK) break;
+    can_tx_tail = can_tx_next(can_tx_tail);
+  }
+}
+
+static bool can_tx_enqueue(uint32_t id, uint32_t dlc, const uint8_t data[8])
+{
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  const uint8_t next = can_tx_next(can_tx_head);
+  if (next == can_tx_tail) {
+    can_tx_drop_count++;
+    __set_PRIMASK(primask);
+    return false;
+  }
+
+  can_tx_frame_t * frame = &can_tx_fifo[can_tx_head];
+  memset(frame, 0, sizeof(*frame));
+  frame->header.StdId = id;
+  frame->header.RTR = CAN_RTR_DATA;
+  frame->header.IDE = CAN_ID_STD;
+  frame->header.DLC = dlc;
+  frame->header.TransmitGlobalTime = DISABLE;
+  memcpy(frame->data, data, 8U);
+  __DMB();
+  can_tx_head = next;
+  can_tx_drain_locked();
+  __set_PRIMASK(primask);
+  return true;
+}
+
+static void can_tx_mailbox_complete(CAN_HandleTypeDef * handle)
+{
+  if (handle != &hcan) return;
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  can_tx_drain_locked();
+  __set_PRIMASK(primask);
+}
+
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef * handle) { can_tx_mailbox_complete(handle); }
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef * handle) { can_tx_mailbox_complete(handle); }
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef * handle) { can_tx_mailbox_complete(handle); }
+
 void sendCanTemp(uint8_t temp_fet, uint8_t temp_coil_1, uint8_t temp_coil_2)
 {
-  can_header.StdId = 0x224;
-  can_header.RTR = CAN_RTR_DATA;
-  can_header.DLC = 8;
-  can_header.TransmitGlobalTime = DISABLE;
-  can_data[0] = temp_fet;
-  can_data[1] = temp_coil_1;
-  can_data[2] = temp_coil_2;
-  can_data[3] = 1;
-  HAL_CAN_AddTxMessage(&hcan, &can_header, can_data, &can_mailbox);
+  const uint8_t data[8] = {temp_fet, temp_coil_1, temp_coil_2, 1U, 0U, 0U, 0U, 0U};
+  (void)can_tx_enqueue(0x224U, 8U, data);
 }
 
 void sendCanMouse(int16_t delta_x, int16_t delta_y, uint16_t quality)
 {
-  can_header.StdId = 0x241;
-  can_header.RTR = CAN_RTR_DATA;
-  can_header.DLC = 6;
-  can_header.TransmitGlobalTime = DISABLE;
+  can_msg_buf_t tx = {0};
   tx.mouse.delta_x = delta_x;
   tx.mouse.delta_y = delta_y;
   tx.mouse.quality = quality;
-  HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
+  (void)can_tx_enqueue(0x241U, 6U, tx.data);
 }
 
 void sendCanError(uint16_t info, float value)
 {
-  can_header.StdId = 0x0;
-  can_header.RTR = CAN_RTR_DATA;
-  can_header.DLC = 8;
-  can_header.TransmitGlobalTime = DISABLE;
+  can_msg_buf_t tx = {0};
   tx.error.node_id = 100;
   tx.error.info = info;
   tx.error.value = value;
-  HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
+  (void)can_tx_enqueue(0x000U, 8U, tx.data);
 }
 
 void sendFloat(uint32_t can_id, float data)
 {
-  can_header.StdId = can_id;
-  can_header.ExtId = 0;
-  can_header.RTR = CAN_RTR_DATA;
-  can_header.DLC = 4;
-  can_header.IDE = CAN_ID_STD;
-  can_header.TransmitGlobalTime = DISABLE;
+  can_msg_buf_t tx = {0};
   tx.voltage.value = data;
-  HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
+  (void)can_tx_enqueue(can_id, 4U, tx.data);
 }
 
 void sendFirmwareVersion(uint32_t build_id, uint32_t image_crc32c)
 {
   uint8_t data[8];
-  CAN_TxHeaderTypeDef header = {0};
-  uint32_t mailbox;
   memcpy(&data[0], &build_id, sizeof(build_id));
   memcpy(&data[4], &image_crc32c, sizeof(image_crc32c));
-  header.StdId = 0x6C4U;
-  header.RTR = CAN_RTR_DATA;
-  header.DLC = 8;
-  header.IDE = CAN_ID_STD;
-  header.TransmitGlobalTime = DISABLE;
-  (void)HAL_CAN_AddTxMessage(&hcan, &header, data, &mailbox);
+  (void)can_tx_enqueue(0x6C4U, 8U, data);
+}
+
+void sendCanPowerStatus(uint8_t flags)
+{
+  uint8_t data[8] = {flags, 0U, 0U, 0U, 0U, 0U, 0U, 0U};
+  (void)can_tx_enqueue(0x244U, 8U, data);
 }
 
 void sendCanBatteryVoltage(float voltage) { sendFloat(0x215, voltage); }

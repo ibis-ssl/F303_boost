@@ -138,15 +138,39 @@ static bool ota_entry_matches(const CAN_RxHeaderTypeDef *header, const uint8_t d
   return header->StdId == OTA_ENTRY_CAN_ID && memcmp(data, "OFWUP", 5U) == 0 && data[5] == OTA_NODE_ID;
 }
 
+static uint8_t power_state_flags(void)
+{
+  uint8_t flags = 0U;
+  if (__HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_4) != 0U) flags |= 1U;
+  if (__HAL_TIM_GET_COMPARE(&htim3, TIM_CHANNEL_1) != 0U ||
+      __HAL_TIM_GET_COMPARE(&htim3, TIM_CHANNEL_2) != 0U) flags |= 2U;
+  if (power_cmd.charge_enabled) flags |= 4U;
+  if (stat.power_enabled || power_cmd.sw_enable_cnt != 0) flags |= 8U;
+  if (HAL_GPIO_ReadPin(POWER_SW_EN_GPIO_Port, POWER_SW_EN_Pin) != GPIO_PIN_RESET) flags |= 16U;
+  return flags;
+}
+
+static void power_update_safe_stop(void)
+{
+  power_cmd.charge_enabled = false;
+  power_cmd.target_voltage = 0.0F;
+  power_cmd.sw_enable_cnt = 0;
+  stat.boost_cnt = 0;
+  stat.kick_cnt = 0U;
+  stat.power_enabled = false;
+  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 0U);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0U);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0U);
+  powerOutputDisable();
+  __DMB();
+}
+
 static void enter_firmware_update(void)
 {
   FLASH_EraseInitTypeDef erase = {0};
   uint32_t page_error = 0U;
   /* 高電圧系を停止してからmetadataを無効化し、常駐bootloaderへresetする。 */
-  powerOutputDisable();
-  TIM2->CCR4 = 0U;
-  TIM3->CCR1 = 0U;
-  TIM3->CCR2 = 0U;
+  power_update_safe_stop();
   TIM2->CR1 &= ~TIM_CR1_CEN;
   TIM3->CR1 &= ~TIM_CR1_CEN;
   TIM4->CR1 &= ~TIM_CR1_CEN;
@@ -197,6 +221,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
         case POWER_OUT:
           if (rx.power_en.enable) {
             power_cmd.sw_enable_cnt = 200;
+          } else {
+            power_update_safe_stop();
           }
           break;
         case MIN_VOLTAGE:
@@ -231,7 +257,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
             startCharge();
           } else {
             // printf("[CAN] charge disable!\n");
-            power_cmd.charge_enabled = false;
+            power_update_safe_stop();
           }
           break;
         case 2:  // kicker select
@@ -617,6 +643,9 @@ void canDataSender()
       break;
     case 4:
       sendCanBatteryCurrent(sensor.batt_cs);
+      break;
+    case 5:
+      sendCanPowerStatus(power_state_flags());
       break;
 
     default:

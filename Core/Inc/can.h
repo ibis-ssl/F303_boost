@@ -91,6 +91,7 @@ void sendCanBatteryVoltage(float voltage);
 void sendCanKickerVoltage(float voltage);
 void sendCanBatteryCurrent(float current);
 void sendFirmwareVersion(uint32_t build_id, uint32_t image_crc32c);
+void sendCanPowerStatus(uint8_t flags);
 
 /* USER CODE END Prototypes */
 
