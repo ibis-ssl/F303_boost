@@ -74,3 +74,9 @@ Classical CAN、標準11 bit ID、1 Mbit/sを使用します。バイト列内�
 アプリがCAN ID `0x600`、payload `OFWUP + node 100`を受信すると、PB2の電源許可をLowにし、TIM2昇圧PWM、TIM3キックPWM、TIM4負電源PWMを停止してからmetadataを消去しresetする。bootloaderもC runtime開始前に同じ出力をLowへ固定し、IWDGを継続refreshしながら更新する。32 frame software FIFO、896 byte block、bitmap、block CRC32C、全体CRC32Cにより通信異常と不完全imageを検出する。
 
 初回導入は`Script/build_bootloader.ps1`、`Script/build_application.ps1`を実行後、`Script/install_bootloader.ps1`をdry-runし、バックアップを確認してから`-Execute`を指定する。高電圧部を含む実機の電源が使用できないため、現時点では実機書込み・安全出力・CAN更新は未確認である。
+
+## 開発用FW識別
+
+- アプリ先頭`0x08004000`から`+0x400`へ`FWVR` magicとUnix秒build IDを配置する。
+- CAN ID `0x611`でnode 100を指定すると、`0x6C4`でbuild IDとmetadataのimage CRC32Cを返す。通常アプリとbootloaderの双方に実装した。
+- アプリ／bootloaderビルド時は`Script/Logs/Build/`へGit hashとdirty状態をJSON保存する。2026-08-27時点ではアプリとbootloaderのビルド成功のみ確認し、実機への書込み・CAN応答試験は行っていない。

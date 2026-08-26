@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
+#include <string.h>
 
 /* USER CODE BEGIN 0 */
 
@@ -127,6 +128,14 @@ void CAN_Filter_Init(void)
   if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK) {
     Error_Handler();
   }
+  sFilterConfig.FilterBank = 2;
+  sFilterConfig.FilterIdHigh = (0x611) << 5;
+  sFilterConfig.FilterIdLow = (0x611) << 5;
+  sFilterConfig.FilterMaskIdHigh = (0x611) << 5;
+  sFilterConfig.FilterMaskIdLow = (0x611) << 5;
+  if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK) {
+    Error_Handler();
+  }
   /* OTA entry ID 0x600を通常制御IDとは別bankで常時受信する。 */
   sFilterConfig.FilterBank = 1;
   sFilterConfig.FilterIdHigh = (0x600) << 5;
@@ -192,6 +201,21 @@ void sendFloat(uint32_t can_id, float data)
   can_header.TransmitGlobalTime = DISABLE;
   tx.voltage.value = data;
   HAL_CAN_AddTxMessage(&hcan, &can_header, tx.data, &can_mailbox);
+}
+
+void sendFirmwareVersion(uint32_t build_id, uint32_t image_crc32c)
+{
+  uint8_t data[8];
+  CAN_TxHeaderTypeDef header = {0};
+  uint32_t mailbox;
+  memcpy(&data[0], &build_id, sizeof(build_id));
+  memcpy(&data[4], &image_crc32c, sizeof(image_crc32c));
+  header.StdId = 0x6C4U;
+  header.RTR = CAN_RTR_DATA;
+  header.DLC = 8;
+  header.IDE = CAN_ID_STD;
+  header.TransmitGlobalTime = DISABLE;
+  (void)HAL_CAN_AddTxMessage(&hcan, &header, data, &mailbox);
 }
 
 void sendCanBatteryVoltage(float voltage) { sendFloat(0x215, voltage); }

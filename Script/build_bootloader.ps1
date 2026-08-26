@@ -9,3 +9,5 @@ $makeArguments+="all"
 & $MakeExecutable @makeArguments
 if($LASTEXITCODE){throw "bootloader build failed"}
 $elf=Join-Path $root "Bootloader\Build\F303_boost_bootloader.elf";$size=& arm-none-eabi-size.exe -A $elf;$used=0;foreach($line in $size){if($line-match '^\.(isr_vector|text|rodata|ARM|init_array|fini_array|data)\s+(\d+)'){$used+=[int]$Matches[2]}};if($used-gt0x4000){throw "bootloader exceeds 16KB: $used"};Write-Output "Bootloader Flash usage: $used / 16384 bytes"
+& python (Join-Path $root "Script\stamp_fw_version.py") --log-only --repo $root --target power_bootloader --log-dir (Join-Path $root "Script\Logs\Build")
+if($LASTEXITCODE){throw "bootloader build logging failed"}

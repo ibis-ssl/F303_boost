@@ -38,6 +38,7 @@
 #include <string.h>
 
 #include "adns3080.h"
+#include "fw_version.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,6 +63,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
+const fw_version_t g_fw_version __attribute__((section(".fw_version"), used)) = {FW_VERSION_MAGIC, 0U};
 
 /* USER CODE END PV */
 
@@ -171,6 +174,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
 
   if (ota_entry_matches(&can_rx_header, rx.data)) {
     enter_firmware_update();
+  }
+  if (can_rx_header.StdId == 0x611U && can_rx_header.DLC == 8U && rx.data[0] == OTA_NODE_ID) {
+    const uint32_t image_crc = *(const uint32_t *)(OTA_METADATA_ADDRESS + 28U);
+    sendFirmwareVersion(fw_version_build_id(), image_crc);
+    return;
   }
 
   can_rx_cnt++;
