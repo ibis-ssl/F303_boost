@@ -73,10 +73,17 @@ Classical CAN、標準11 bit ID、1 Mbit/sを使用します。バイト列内�
 
 アプリがCAN ID `0x600`、payload `OFWUP + node 100`を受信すると、PB2の電源許可をLowにし、TIM2昇圧PWM、TIM3キックPWM、TIM4負電源PWMを停止してからmetadataを消去しresetする。bootloaderもC runtime開始前に同じ出力をLowへ固定し、IWDGを継続refreshしながら更新する。32 frame software FIFO、896 byte block、bitmap、block CRC32C、全体CRC32Cにより通信異常と不完全imageを検出する。
 
-初回導入は`Script/build_bootloader.ps1`、`Script/build_application.ps1`を実行後、`Script/install_bootloader.ps1`をdry-runし、バックアップを確認してから`-Execute`を指定する。高電圧部を含む実機の電源が使用できないため、現時点では実機書込み・安全出力・CAN更新は未確認である。
+初回導入は`Script/build_bootloader.ps1`、`Script/build_application.ps1`を実行後、`Script/install_bootloader.ps1`をdry-runし、バックアップを確認してから`-Execute`を指定する。
 
 ## 開発用FW識別
 
 - アプリ先頭`0x08004000`から`+0x400`へ`FWVR` magicとUnix秒build IDを配置する。
 - CAN ID `0x611`でnode 100を指定すると、`0x6C4`でbuild IDとmetadataのimage CRC32Cを返す。通常アプリとbootloaderの双方に実装した。
-- アプリ／bootloaderビルド時は`Script/Logs/Build/`へGit hashとdirty状態をJSON保存する。2026-08-27時点ではアプリとbootloaderのビルド成功のみ確認し、実機への書込み・CAN応答試験は行っていない。
+- アプリ／bootloaderビルド時は`Script/Logs/Build/`へGit hashとdirty状態をJSON保存する。
+
+## ブート時の更新判定と実機確認
+
+- metadataとアプリ全体CRC32Cが有効なら、bootloaderはCANを初期化せず直ちにアプリへ遷移する。通常の`0x010`/`0x110`が周期送信されていてもbootloaderに留まらない。
+- OTA開始時はMainが通常コマンドで充電許可と電源出力を無効化し、安全状態のstatusを3フレーム確認する。その後アプリがmetadataを無効化してresetし、bootloaderがCAN更新を無期限に待つ。
+- 転送中断、CRC不一致、書込み途中のresetではmetadataを確定しないため、不完全なアプリを実行しない。bootloaderの出力安全状態を維持したままCM4から再更新できる。
+- 2026-08-27、ST-Linkでbootloaderを書込み後、reset直後にUART起動ログと全自己診断を確認した。昇圧動作中からCM4→Main→Power OTAを実行し、`power_safe_state=confirmed`後に65,244 byteを13.848秒で更新した。更新前にUARTで`PW 0 / BV 0 / Ch 0`を確認し、更新後は待機せずアプリ起動ログへ復帰した。build IDとCRC32Cも期待バイナリと`SAME`である。
