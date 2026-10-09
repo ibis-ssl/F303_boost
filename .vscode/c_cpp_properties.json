@@ -1,24 +1,50 @@
 {
+    "env": {
+        "stm32Compiler": "C:/ST/STM32CubeCLT_1.21.0/GNU-tools-for-STM32/bin/arm-none-eabi-gcc.exe"
+    },
     "configurations": [
         {
-            "name": "Win32",
-            "includePath": [
-                "${default}",
-                "${workspaceFolder}/**",
-                "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.2 rel1\\arm-none-eabi\\include**",
-                "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.2 rel1\\lib\\gcc\\arm-none-eabi\\14.2.1\\include"
-            ],
+            "name": "STM32F303 Debug",
+            "compilerPath": "${stm32Compiler}",
+            "compilerArgs": ["-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard", "--specs=nano.specs"],
             "intelliSenseMode": "windows-gcc-arm",
-            "defines": [
-                "USE_HAL_DRIVER",
-                "STM32F303xC",
-                "DEBUG",
-                "M_PI = 3.1415"
+            "cStandard": "gnu11",
+            "includePath": [
+                "${workspaceFolder}/Core/Inc",
+                "${workspaceFolder}/Drivers/STM32F3xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32F3xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F3xx/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Include"
             ],
-            "cStandard": "c11",
-            "cppStandard": "c++11",
-            "compilerPath": "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.2 rel1\\bin\\arm-none-eabi-gcc"
+            "defines": ["DEBUG", "USE_HAL_DRIVER", "STM32F303xC"],
+            "browse": {
+                "path": ["${workspaceFolder}/Core", "${workspaceFolder}/Drivers"],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        },
+        {
+            "name": "STM32F303 Bootloader",
+            "compilerPath": "${stm32Compiler}",
+            "compilerArgs": ["-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16", "-mfloat-abi=hard", "--specs=nano.specs"],
+            "intelliSenseMode": "windows-gcc-arm",
+            "cStandard": "gnu11",
+            "includePath": [
+                "${workspaceFolder}/Bootloader/Inc",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F3xx/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Include"
+            ],
+            "defines": ["STM32F303xC"],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/Bootloader/Inc",
+                    "${workspaceFolder}/Bootloader/Src",
+                    "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F3xx/Include",
+                    "${workspaceFolder}/Drivers/CMSIS/Include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
-    "version": 4
+    "version": 4,
+    "enableConfigurationSquiggles": true
 }

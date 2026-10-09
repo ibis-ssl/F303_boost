@@ -9,6 +9,21 @@ STM32F303CBT6を使用した、Orion向け昇圧・キッカー・電源監視�
 - STM32CubeProgrammer / STM32CubeCLT
 - ターゲット: STM32F303CBT6
 
+## VS Codeでのコードブラウズ
+
+このリポジトリのルートフォルダーをVS Codeで開き、MicrosoftのC/C++拡張機能（`ms-vscode.cpptools`）を使用します。`.vscode/settings.json`でIntelliSenseを有効にし、解析の競合を避けるため、このワークスペースではSTM32Cube clangdを無効にしています。
+
+`.vscode/c_cpp_properties.json`の構成は次のとおりです。
+
+- `STM32F303 Debug`: アプリケーション用。DebugのMakefileと同じインクルードパス、`DEBUG`、`USE_HAL_DRIVER`、`STM32F303xC`を使用します。
+- `STM32F303 Bootloader`: `Bootloader/Src`用。ブートローダーのMakefileと同じインクルードパスと`STM32F303xC`を使用します。HALとアプリケーション側のヘッダーを混在させません。
+
+両構成ともGNU C11、Cortex-M4、ハードウェア浮動小数点（`fpv4-sp-d16` / `hard`）で解析します。標準ライブラリのヘッダーとコンパイラ組み込みマクロは、インストール済みの`C:/ST/STM32CubeCLT_1.21.0/GNU-tools-for-STM32/bin/arm-none-eabi-gcc.exe`から取得します。別の環境では同JSONの`env.stm32Compiler`を実際のコンパイラパスへ変更してください。
+
+設定変更後はコマンドパレットから`Developer: Reload Window`を実行してください。通常は`STM32F303 Debug`を選び、ブートローダーを読む際は`C/C++: Select a Configuration...`で構成を切り替えます。定義ジャンプは`F12`、定義のプレビューは`Alt+F12`、参照検索は`Shift+F12`です。古い解析結果が残る場合は`C/C++: Reset IntelliSense Database`を実行してください。
+
+インクルードパスやマクロをCubeMXまたはMakefileで変更した場合は、この解析設定も更新してください。設定項目の詳細は[VS Code公式リファレンス](https://code.visualstudio.com/docs/cpp/customize-cpp-settings)を参照してください。
+
 ## ビルド
 
 STM32CubeIDEでDebugまたはRelease構成を生成した後、PowerShellから次を実行します。
